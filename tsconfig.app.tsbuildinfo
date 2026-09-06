@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/DataTable.tsx","./src/components/Filters.tsx","./src/components/KPICard.tsx","./src/components/LoadingScreen.tsx","./src/components/PriceChart.tsx","./src/hooks/useMarketData.ts","./src/types/index.ts"],"version":"5.7.3"}

@@ -1,0 +1,13 @@
+{
+  "geradoEm": "2026-09-06T01:01:30.278825+00:00",
+  "totalRegistros": 7244,
+  "fontes": {
+    "CEPEA": 6449,
+    "CotacaoDoDia": 795
+  },
+  "periodoInicio": "1997-07-23",
+  "periodoFim": "2026-09-04",
+  "valorMinimo": 25.71,
+  "valorMaximo": 367.3,
+  "valorMedio": 131.1933531198233
+}
