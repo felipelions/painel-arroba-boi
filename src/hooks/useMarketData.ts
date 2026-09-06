@@ -40,19 +40,23 @@ export function useMarketData(): UseMarketDataReturn {
       setProgress(0);
       setProgressText('Baixando histórico CEPEA...');
 
-      const [historicoRes, snapshotRes] = await Promise.all([
-        fetch('/data/cepea-historico.json'),
-        fetch('/data/snapshot.json')
-      ]);
+      // Histórico grande (~1.1MB) fica no GitHub; jsDelivr evita limite de upload da API Vercel.
+      const HISTORICO_URL =
+        'https://cdn.jsdelivr.net/gh/felipelions/painel-arroba-boi@main/public/data/cepea-historico.json';
+      const historicoRes = await fetch(HISTORICO_URL).catch(() => null);
+      const historicoOk = historicoRes && historicoRes.ok
+        ? historicoRes
+        : await fetch('/data/cepea-historico.json');
+      const snapshotRes = await fetch('/data/snapshot.json');
 
-      if (!historicoRes.ok || !snapshotRes.ok) {
+      if (!historicoOk.ok || !snapshotRes.ok) {
         throw new Error('Erro ao carregar dados');
       }
 
       setProgress(40);
       setProgressText('Processando registros...');
 
-      const historicoData = await historicoRes.json();
+      const historicoData = await historicoOk.json();
       const snapshotData = await snapshotRes.json();
 
       setProgress(70);
