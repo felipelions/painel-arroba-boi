@@ -1,165 +1,108 @@
-# 🐂 Painel Arroba do Boi
+# 🐂 Painel Arroba do Boi & Simulador Estratégico
 
-Dashboard web mobile-first para visualização de dados de mercado de arroba de gado bovino no Brasil.
+Painel completo de inteligência de mercado e simulador estratégico para pecuária de corte no Brasil, 100% mobile-first, com integração de IA (OpenAI), cálculos zootécnicos determinísticos e persistência em JSON local no servidor sem necessidade de banco de dados.
 
-## 📊 Sobre
+---
 
-Este painel integra dados históricos de duas fontes principais:
-- **CEPEA** (Centro de Estudos Avançados em Economia Aplicada) via Zenodo
-- **CotacaoDoDia.com** via scraping web
+## 🌾 Nova Tela: Simulação de Cenários
 
-O dashboard oferece visualizações interativas, KPIs em tempo real, filtros dinâmicos e exportação de dados em CSV.
+Baseada na especificação técnica completa, a tela permite que o produtor configure e analise o impacto zootécnico e financeiro de suas decisões operacionais:
 
-## ✨ Funcionalidades
+- **🤖 Preencher com IA**: Botão que abre modal com campo de texto para o produtor descrever sua estratégia em linguagem natural (ex: *"confinar 300 bois de 400kg por 90 dias com GMD de 1.4kg e ração a R$ 9,50/dia"*), com barra de progresso em tempo real, interpretação automática via modelo OpenAI configurado no `.env` e carregamento instantâneo no painel.
+- **⚡ Motor Determinístico (`SimulationEngine`)**: Cálculo exato de ganho de peso, arrobas ganhas e abatidas, rendimento de carcaça, custos alimentares e operacionais, receita bruta/líquida, margem, ponto de equilíbrio da arroba e score de risco (0 a 100).
+- **💡 Motor de Insights & Alertas (`InsightEngine`)**: Diagnósticos automáticos baseados em regras para déficit de pastagem, necessidade de capital, sensibilidade de mercado e oportunidades zootécnicas.
+- **📊 Fluxo de Caixa Mensal**: Gráficos e tabela mês a mês com receitas de abate, custos e identificação do maior déficit de caixa e período crítico.
+- **🎯 Ponto de Equilíbrio & Sensibilidade**: Apresentação de destaque do preço de equilíbrio da arroba, margem de segurança e ranking das variáveis que mais impactam o resultado final.
+- **📑 Comparador de Cenários**: Compare até 4 cenários lado a lado com destaques automáticos para Maior Lucro, Maior Margem, Menor Risco e Menor Aporte de Capital.
+- **💾 Persistência em JSON no Servidor**: Salva automaticamente no arquivo `data/cenarios.json` via rotas de API Node.js, com sincronização em `localStorage` e opções de **Exportar JSON** e **Importar JSON**.
+- **📱 100% Mobile-First**: Controles tácteis com sliders duplos e inputs numéricos, barra de navegação inferior fixa para celular e alternador entre *Modo Rápido (10 variáveis)* e *Modo Avançado*.
 
-- **📱 Mobile-First**: Layout otimizado para celular com touch targets de 44px+
-- **📈 KPIs Dinâmicos**: Cotação atual, média, mínima e máxima do período
-- **🎯 Filtros Avançados**: Por período (1M/3M/1A/5A/Máx), fonte, tipo, UF e praça
-- **📊 Gráfico Interativo**: Histórico de preços com Recharts
-- **📋 Tabela de Dados**: Visualização dos últimos registros
-- **💾 Exportação CSV**: Download de dados filtrados
-- **🎨 UI Dark Agribusiness**: Design moderno em dark mode
-- **⚡ Estados de Loading**: Skeleton screens, progress bars e feedback em PT-BR
+---
 
-## 🚀 Como Usar
+## ⚙️ Variáveis de Ambiente (.env)
+
+Crie ou edite o arquivo `.env.local` na raiz do projeto:
+
+```env
+# Chave da API OpenAI (para a função "Preencher com IA")
+OPENAI_API_KEY=sk-sua-chave-aqui
+
+# Modelo da OpenAI desejado (ex: gpt-4o-mini, motor5-nano, gpt-4o)
+OPENAI_MODEL=gpt-4o-mini
+```
+
+> *Nota: Caso nenhuma chave da OpenAI esteja configurada, o sistema aciona automaticamente o interpretador inteligente zootécnico local de contingência, garantindo funcionamento completo.*
+
+---
+
+## 🚀 Como Executar
+
+### Pré-requisitos
+- Node.js 18+ ou 20+
 
 ### Instalação
-
 ```bash
 npm install
 ```
 
-### Desenvolvimento
-
+### Modo de Desenvolvimento
 ```bash
 npm run dev
 ```
-
-O servidor estará disponível em `http://localhost:43123`
+Acesse em: `http://localhost:43123`
 
 ### Build de Produção
-
 ```bash
 npm run build
-npm run preview
+npm run start
 ```
-
-### Dados e atualização
-
-O repositório já inclui o histórico real CEPEA (~7244 pontos, 1997-2026) em public/data/cepea-historico.json e snapshot.json. Para regenerar:
-
-```bash
-npm run data:build
-```
-
-Este comando irá:
-1. Baixar o histórico CEPEA do Zenodo (arquivo XLS)
-2. Fazer scraping do CotacaoDoDia.com desde julho/2023
-3. Gerar `public/data/cepea-historico.json` e `public/data/snapshot.json`
-
-**Nota**: O scraping pode levar alguns minutos dependendo da quantidade de dados.
-
-## 🛠️ Tecnologias
-
-- **Vite** - Build tool e dev server
-- **React 19** - Framework UI
-- **TypeScript** - Tipagem estática
-- **Tailwind CSS** - Estilização
-- **Recharts** - Gráficos interativos
-- **Lucide React** - Ícones
-- **XLSX** - Leitura de arquivos Excel
-- **Cheerio** - Scraping HTML
-- **node-fetch** - Requisições HTTP
-
-## 📁 Estrutura do Projeto
-
-```
-painel-arroba-boi/
-├── public/
-│   └── data/
-│       ├── cepea-historico.json   # Dados históricos
-│       └── snapshot.json           # Estatísticas gerais
-├── scripts/
-│   └── build-data.mjs              # Script de coleta de dados
-├── src/
-│   ├── components/                 # Componentes React
-│   │   ├── LoadingScreen.tsx
-│   │   ├── KPICard.tsx
-│   │   ├── Filters.tsx
-│   │   ├── PriceChart.tsx
-│   │   └── DataTable.tsx
-│   ├── hooks/
-│   │   └── useMarketData.ts        # Hook customizado
-│   ├── types/
-│   │   └── index.ts                # Definições TypeScript
-│   ├── App.tsx                     # Componente principal
-│   ├── main.tsx                    # Entry point
-│   └── index.css                   # Estilos globais
-└── package.json
-```
-
-## 📊 Fontes de Dados
-
-### CEPEA (Zenodo)
-- **URL**: https://zenodo.org/records/12163228
-- **Formato**: XLS
-- **Conteúdo**: Série histórica de preços CEPEA
-- **Licença**: Consultar repositório Zenodo
-
-### CotacaoDoDia.com
-- **URL Base**: https://www.cotacaododia.com/boi-gordo/historico/
-- **Período**: Julho/2023 em diante
-- **Método**: Web scraping responsável
-- **Nota**: Use com moderação para não sobrecarregar o servidor
-
-## Deploy (Vercel)
-
-1. Importe o repositorio GitHub felipelions/painel-arroba-boi no Vercel
-2. Framework preset: Vite
-3. Build command: npm run build
-4. Output directory: dist
-5. public/data incluido automaticamente (historico ~1.1MB)
-
-## ⚖️ Licença e Atribuição
-
-Este projeto é fornecido como está para fins educacionais e de pesquisa.
-
-**Atribuição de Dados**:
-- Dados CEPEA: Centro de Estudos Avançados em Economia Aplicada (ESALQ/USP)
-- Dados CotacaoDoDia: www.cotacaododia.com
-
-Por favor, respeite os termos de uso das fontes de dados ao utilizar este dashboard.
-
-## 🤝 Contribuindo
-
-Contribuições são bem-vindas! Algumas ideias:
-- Adicionar mais fontes de dados (B3, Esalq)
-- Implementar análises preditivas
-- Adicionar comparações regionais
-- Melhorar a performance do scraping
-- Adicionar testes automatizados
-
-## 📝 Notas Técnicas
-
-### Mobile-First
-- Touch targets mínimos de 44px
-- Bottom sheet para filtros em mobile
-- Tabela responsiva com colunas colapsáveis
-- Gráfico adaptativo via ResponsiveContainer
-
-### Estados de Loading
-- Skeleton screens para KPIs e tabela
-- Progress bar determinada (0-100%)
-- Textos descritivos em PT-BR
-- Transições suaves
-
-### Performance
-- Dados carregados preferindo /data local, com fallback CDN (jsDelivr)
-- Filtros aplicados via useMemo
-- Agregação de dados no client-side
-- Gráfico com agregação semanal em períodos longos
-- Últimos 50 registros na tabela
 
 ---
 
-**Desenvolvido com ❤️ para o agronegócio brasileiro**
+## ☁️ Deploy na Vercel
+
+O projeto está configurado para deploy nativo na **Vercel** com **Next.js**:
+1. Conecte o repositório GitHub na Vercel.
+2. Nas configurações de **Environment Variables** da Vercel, adicione:
+   - `OPENAI_API_KEY`: sua chave OpenAI
+   - `OPENAI_MODEL`: `gpt-4o-mini` (ou o motor desejado)
+3. Clique em **Deploy** (framework detectado automaticamente como Next.js).
+
+---
+
+## 🛠️ Estrutura do Projeto
+
+```
+painel-arroba-boi/
+├── data/
+│   └── cenarios.json               # Persistência JSON de cenários (sem banco de dados)
+├── public/
+│   └── data/
+│       ├── cepea-historico.json    # Dados históricos CEPEA
+│       └── snapshot.json           # Estatísticas CEPEA
+├── src/
+│   ├── app/                        # Next.js App Router
+│   │   ├── api/
+│   │   │   ├── cenarios/           # Rotas de leitura e gravação de JSON
+│   │   │   └── ai/preencher/       # Endpoint de integração com OpenAI
+│   │   ├── layout.tsx              # Shell HTML com metatags mobile
+│   │   └── page.tsx                # Página principal com abas e bottom bar mobile
+│   ├── components/
+│   │   ├── simulacoes/             # Componentes da Simulação de Cenários
+│   │   │   ├── SimulacaoCenáriosView.tsx
+│   │   │   ├── ModalPreencherIA.tsx
+│   │   │   └── ComparadorCenários.tsx
+│   │   ├── Filters.tsx
+│   │   ├── KPICard.tsx
+│   │   ├── PriceChart.tsx
+│   │   └── DataTable.tsx
+│   ├── services/
+│   │   ├── SimulationEngine.ts     # Cálculos zootécnicos e financeiros
+│   │   ├── InsightEngine.ts        # Regras de alertas e inteligência
+│   │   └── StorageService.ts       # Camada de persistência JSON
+│   └── types/
+│       └── simulation.ts           # Interfaces e modelos TypeScript
+├── .env.example
+├── next.config.mjs
+└── package.json
+```

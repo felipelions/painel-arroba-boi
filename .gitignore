@@ -1,7 +1,22 @@
-node_modules
-dist
+# Dependências
+node_modules/
+/.pnp
+.pnp.js
+
+# Build Next.js
+.next/
+out/
+
+# Variáveis de ambiente com chaves e credenciais
+.env*.local
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Sistema
 .DS_Store
-*.local
-.env*
-.vercel
-*.tsbuildinfo
+Thumbs.db
