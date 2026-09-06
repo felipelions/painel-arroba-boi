@@ -44,9 +44,9 @@ npm run build
 npm run preview
 ```
 
-### Atualizar Dados Reais
+### Dados e atualização
 
-O projeto vem com dados de demonstração. Para buscar dados reais e atualizados:
+O repositório já inclui o histórico real CEPEA (~7244 pontos, 1997-2026) em public/data/cepea-historico.json e snapshot.json. Para regenerar:
 
 ```bash
 npm run data:build
@@ -112,6 +112,14 @@ painel-arroba-boi/
 - **Método**: Web scraping responsável
 - **Nota**: Use com moderação para não sobrecarregar o servidor
 
+## Deploy (Vercel)
+
+1. Importe o repositorio GitHub felipelions/painel-arroba-boi no Vercel
+2. Framework preset: Vite
+3. Build command: npm run build
+4. Output directory: dist
+5. public/data incluido automaticamente (historico ~1.1MB)
+
 ## ⚖️ Licença e Atribuição
 
 Este projeto é fornecido como está para fins educacionais e de pesquisa.
@@ -146,10 +154,10 @@ Contribuições são bem-vindas! Algumas ideias:
 - Transições suaves
 
 ### Performance
-- Dados carregados via fetch local (fast)
+- Dados carregados preferindo /data local, com fallback CDN (jsDelivr)
 - Filtros aplicados via useMemo
 - Agregação de dados no client-side
-- Últimos 180 pontos no gráfico
+- Gráfico com agregação semanal em períodos longos
 - Últimos 50 registros na tabela
 
 ---
