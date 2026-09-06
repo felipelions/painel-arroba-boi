@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   CenarioCompleto,
   CenarioVariaveis,
@@ -13,7 +13,7 @@ import { ModalPreencherIA } from './ModalPreencherIA';
 import { ComparadorCenários } from './ComparadorCenários';
 import {
   Sparkles,
-  Save,
+  Mic,
   Copy,
   Trash2,
   Download,
@@ -28,14 +28,20 @@ import {
   ShieldCheck,
   CheckCircle2,
   Sliders,
-  Maximize2,
   Zap,
-  Info,
   ChevronDown,
+  ChevronUp,
   RefreshCw,
   Pencil,
   Check,
-  X
+  X,
+  PlusCircle,
+  MinusCircle,
+  HelpCircle,
+  ArrowUpRight,
+  ShieldAlert,
+  Wallet,
+  Scale
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -54,15 +60,20 @@ export function SimulacaoCenáriosView() {
   const [cenarios, setCenarios] = useState<CenarioCompleto[]>([]);
   const [cenarioAtual, setCenarioAtual] = useState<CenarioCompleto | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'variaveis' | 'resultados' | 'sensibilidade' | 'alertas' | 'comparar'>('variaveis');
-  const [modoRapido, setModoRapido] = useState(true);
+  
+  // Abas didáticas simplificadas
+  const [activeTab, setActiveTab] = useState<'simulador' | 'resultado' | 'diagnostico' | 'comparador'>('simulador');
+  
+  // Expansão de custos avançados
+  const [showAdvancedCosts, setShowAdvancedCosts] = useState(false);
+  
+  // Modais e edição de título
   const [modalIAOpen, setModalIAOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState('');
-  const [isEditingDesc, setIsEditingDesc] = useState(false);
-  const [editDescValue, setEditDescValue] = useState('');
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Carrega cenários iniciais
@@ -86,7 +97,7 @@ export function SimulacaoCenáriosView() {
     setTimeout(() => setToastMessage(null), 3500);
   }
 
-  // Recalcula a simulação e agenda salvamento automático
+  // Recalcula simulação e salva com debounce
   function updateVariable<K extends keyof CenarioVariaveis>(key: K, value: CenarioVariaveis[K]) {
     if (!cenarioAtual) return;
 
@@ -110,19 +121,26 @@ export function SimulacaoCenáriosView() {
     setCenarios(prev => prev.map(c => c.id === cenarioAtualizado.id ? cenarioAtualizado : c));
 
     setSaveStatus('salvando');
-    StorageService.debounceAutoSave(cenarioAtualizado, 600, (success) => {
+    StorageService.debounceAutoSave(cenarioAtualizado, 500, (success) => {
       setSaveStatus(success ? 'salvo' : 'erro');
     });
   }
 
-  // Seleciona outro cenário
+  // Atalhos de incremento didático (+/-)
+  function adjustNumber(key: keyof CenarioVariaveis, delta: number, min = 0, max = 999999) {
+    if (!cenarioAtual) return;
+    const current = Number(cenarioAtual.variaveis[key]) || 0;
+    const next = Math.max(min, Math.min(max, Math.round((current + delta) * 100) / 100));
+    updateVariable(key, next as any);
+  }
+
   function handleSelectCenario(id: string) {
     const selected = cenarios.find(c => c.id === id);
     if (selected) {
       setCenarioAtual(selected);
       StorageService.setActiveScenarioId(selected.id);
       setIsEditingTitle(false);
-      setIsEditingDesc(false);
+      setShowActionsMenu(false);
       showToast(`Cenário "${selected.nome}" carregado.`);
     }
   }
@@ -146,27 +164,11 @@ export function SimulacaoCenáriosView() {
     showToast(`Título alterado para "${newName}"`);
   }
 
-  async function handleSaveDesc() {
-    if (!cenarioAtual) return;
-    const newDesc = editDescValue.trim();
-    const updated: CenarioCompleto = {
-      ...cenarioAtual,
-      descricao: newDesc,
-      dataAtualizacao: new Date().toISOString()
-    };
-    setCenarioAtual(updated);
-    setCenarios(prev => prev.map(c => c.id === updated.id ? updated : c));
-    setIsEditingDesc(false);
-    await StorageService.saveScenario(updated);
-    showToast('Descrição do cenário atualizada');
-  }
-
-  // Cria novo cenário
   async function handleNovoCenario() {
     if (!cenarioAtual) return;
     const novo: CenarioCompleto = {
       id: `cenario_${Date.now()}`,
-      nome: `Novo Cenário ${cenarios.length + 1}`,
+      nome: `Plano Safra ${cenarios.length + 1}`,
       descricao: 'Novo planejamento estratégico personalizado',
       dataCriacao: new Date().toISOString(),
       dataAtualizacao: new Date().toISOString(),
@@ -181,10 +183,10 @@ export function SimulacaoCenáriosView() {
     setCenarios(prev => [...prev, novo]);
     setCenarioAtual(novo);
     StorageService.setActiveScenarioId(novo.id);
-    showToast('Novo cenário criado com sucesso!');
+    setShowActionsMenu(false);
+    showToast('Novo plano criado!');
   }
 
-  // Duplica cenário
   async function handleDuplicar() {
     if (!cenarioAtual) return;
     const duplicated = await StorageService.duplicateScenario(cenarioAtual.id);
@@ -192,35 +194,35 @@ export function SimulacaoCenáriosView() {
       setCenarios(prev => [...prev, duplicated]);
       setCenarioAtual(duplicated);
       StorageService.setActiveScenarioId(duplicated.id);
-      showToast(`Cenário duplicado: "${duplicated.nome}"`);
+      setShowActionsMenu(false);
+      showToast(`Plano duplicado: "${duplicated.nome}"`);
     }
   }
 
-  // Exclui cenário
   async function handleExcluir() {
     if (!cenarioAtual) return;
     if (cenarios.length <= 1) {
-      alert('Você não pode excluir o único cenário existente.');
+      alert('Você precisa ter pelo menos um cenário no sistema.');
       return;
     }
-    if (!confirm(`Deseja realmente excluir o cenário "${cenarioAtual.nome}"?`)) return;
+    if (!confirm(`Deseja apagar o plano "${cenarioAtual.nome}"?`)) return;
 
     await StorageService.deleteScenario(cenarioAtual.id);
     const restantes = cenarios.filter(c => c.id !== cenarioAtual.id);
     setCenarios(restantes);
     setCenarioAtual(restantes[0]);
     StorageService.setActiveScenarioId(restantes[0].id);
-    showToast('Cenário excluído.');
+    setShowActionsMenu(false);
+    showToast('Plano excluído.');
   }
 
-  // Exporta JSON
   function handleExportar() {
     if (!cenarioAtual) return;
     StorageService.exportScenarioJSON(cenarioAtual);
-    showToast('Arquivo JSON do cenário baixado!');
+    setShowActionsMenu(false);
+    showToast('Arquivo baixado no seu celular/computador!');
   }
 
-  // Importa JSON
   function handleImportar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -230,7 +232,6 @@ export function SimulacaoCenáriosView() {
       try {
         const text = event.target?.result as string;
         const imported = StorageService.importScenarioJSON(text);
-        // Recalcula para garantir consistência
         imported.resultados = SimulationEngine.calculate(imported.variaveis, imported.fazenda);
         imported.alertas = InsightEngine.generateInsights(imported.variaveis, imported.resultados, imported.fazenda);
 
@@ -238,16 +239,16 @@ export function SimulacaoCenáriosView() {
         setCenarios(prev => [...prev, imported]);
         setCenarioAtual(imported);
         StorageService.setActiveScenarioId(imported.id);
-        showToast(`Cenário "${imported.nome}" importado com sucesso!`);
+        setShowActionsMenu(false);
+        showToast(`Plano "${imported.nome}" importado com sucesso!`);
       } catch (err: any) {
-        alert('Erro ao importar JSON: ' + err.message);
+        alert('Arquivo inválido: ' + err.message);
       }
     };
     reader.readAsText(file);
     if (e.target) e.target.value = '';
   }
 
-  // Aplicação dos dados preenchidos pela IA
   async function handleApplyAI(aiData: any) {
     if (!cenarioAtual) return;
 
@@ -272,14 +273,14 @@ export function SimulacaoCenáriosView() {
     setCenarioAtual(cenarioAtualizado);
     setCenarios(prev => prev.map(c => c.id === cenarioAtualizado.id ? cenarioAtualizado : c));
     await StorageService.saveScenario(cenarioAtualizado);
-    showToast('✨ Cenário atualizado pela IA com sucesso!');
+    showToast('✨ Simulação preenchida pela IA com sucesso!');
   }
 
   if (loading || !cenarioAtual) {
     return (
       <div className="p-8 text-center text-slate-400">
         <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-400" />
-        Carregando painel de simulação...
+        Carregando simulador da fazenda...
       </div>
     );
   }
@@ -288,18 +289,22 @@ export function SimulacaoCenáriosView() {
   const r = cenarioAtual.resultados;
   const f = cenarioAtual.fazenda;
 
+  // Encontra cenário base para comparação didática
+  const cenarioBase = cenarios.find(c => c.isBase) || cenarios[0];
+  const diferencaLucroBase = r.lucro - cenarioBase.resultados.lucro;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 max-w-5xl mx-auto pb-12">
       
-      {/* Toast flutuante de notificação */}
+      {/* Notificação Toast */}
       {toastMessage && (
-        <div className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-50 px-4 py-2.5 bg-emerald-600 text-white text-xs font-semibold rounded-xl shadow-xl flex items-center gap-2 animate-bounce">
-          <CheckCircle2 className="w-4 h-4" />
-          {toastMessage}
+        <div className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-50 px-4 py-3 bg-emerald-600 text-white text-xs sm:text-sm font-bold rounded-2xl shadow-2xl flex items-center gap-2 animate-bounce">
+          <CheckCircle2 className="w-5 h-5 shrink-0" />
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Input de arquivo invisível para importação */}
+      {/* Input de arquivo invisível */}
       <input
         type="file"
         ref={fileInputRef}
@@ -308,408 +313,332 @@ export function SimulacaoCenáriosView() {
         className="hidden"
       />
 
-      {/* 1. Header do Cenário & Barra de Ações (Mobile-First) */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 backdrop-blur-sm shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          
-          <div>
-            <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold uppercase tracking-wider">
-              <span>{f.nome}</span>
-              <span>•</span>
-              <span>{f.municipio} - {f.estado}</span>
-              <span>•</span>
-              <span className="hidden sm:inline">{f.areaProdutiva} ha produtivos</span>
-            </div>
-            
-            {/* Título do Cenário (com Edição) */}
-            {isEditingTitle ? (
-              <div className="flex items-center gap-2 mt-1 max-w-lg">
-                <input
-                  type="text"
-                  value={editTitleValue}
-                  onChange={(e) => setEditTitleValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveTitle();
-                    if (e.key === 'Escape') setIsEditingTitle(false);
-                  }}
-                  autoFocus
-                  placeholder="Nome do cenário..."
-                  className="text-base sm:text-xl font-bold text-white bg-slate-950 px-3 py-1.5 rounded-xl border border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 w-full"
-                />
-                <button
-                  type="button"
-                  onClick={handleSaveTitle}
-                  title="Salvar título"
-                  className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-colors shrink-0 shadow-md"
-                >
-                  <Check className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingTitle(false)}
-                  title="Cancelar"
-                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-colors shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+      {/* 1. TOPO: Título, Fazenda e Ações Didáticas */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl space-y-3">
+        
+        {/* Linha 1: Identificação da Fazenda & Status de Salvamento */}
+        <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-emerald-400 font-bold uppercase">{f.nome}</span>
+            <span>•</span>
+            <span>{f.municipio} ({f.estado})</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            {saveStatus === 'salvando' ? (
+              <span className="text-amber-400 font-medium">Salvando...</span>
             ) : (
-              <div className="flex flex-wrap items-center gap-2 mt-1">
-                <h2 className="text-lg sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                  <span>{cenarioAtual.nome}</span>
-                  {cenarioAtual.isBase && (
-                    <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      Base
-                    </span>
-                  )}
-                </h2>
+              <span className="text-slate-400 flex items-center gap-1">
+                <Check className="w-3 h-3 text-emerald-400" /> Salvo local
+              </span>
+            )}
+          </div>
+        </div>
 
+        {/* Linha 2: Título do Cenário (Edição Direta com 1 Toque) */}
+        <div className="flex items-center justify-between gap-2">
+          {isEditingTitle ? (
+            <div className="flex items-center gap-2 flex-1">
+              <input
+                type="text"
+                value={editTitleValue}
+                onChange={(e) => setEditTitleValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveTitle();
+                  if (e.key === 'Escape') setIsEditingTitle(false);
+                }}
+                autoFocus
+                className="w-full text-base sm:text-xl font-bold text-white bg-slate-950 px-3.5 py-2 rounded-2xl border-2 border-emerald-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleSaveTitle}
+                className="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl shrink-0"
+              >
+                <Check className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditingTitle(false)}
+                className="p-2.5 bg-slate-800 text-slate-400 hover:text-white rounded-2xl shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h2 className="text-lg sm:text-2xl font-black text-white truncate tracking-tight">
+                {cenarioAtual.nome}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditTitleValue(cenarioAtual.nome);
+                  setIsEditingTitle(true);
+                }}
+                title="Editar nome deste plano"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Menu de Cenários & Ações */}
+          <div className="relative flex items-center gap-1.5">
+            {cenarios.length > 1 && (
+              <select
+                value={cenarioAtual.id}
+                onChange={(e) => handleSelectCenario(e.target.value)}
+                className="text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl px-2.5 py-2 cursor-pointer focus:outline-none"
+              >
+                {cenarios.map(c => (
+                  <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                    Trocar: {c.nome} {c.isBase ? '(Base)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowActionsMenu(!showActionsMenu)}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors text-xs font-semibold flex items-center gap-1"
+            >
+              <span>Mais</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showActionsMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Menu Dropdown de Ações */}
+            {showActionsMenu && (
+              <div className="absolute right-0 top-12 z-50 w-52 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-2 space-y-1 text-xs animate-fadeIn">
                 <button
                   type="button"
-                  onClick={() => {
-                    setEditTitleValue(cenarioAtual.nome);
-                    setIsEditingTitle(true);
-                  }}
-                  title="Editar título do cenário"
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800/80 transition-colors"
+                  onClick={handleNovoCenario}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl font-medium"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
+                  <Plus className="w-4 h-4 text-emerald-400" />
+                  <span>Novo Plano em Branco</span>
                 </button>
-
-                {/* Seletor de Cenários Rápido */}
+                <button
+                  type="button"
+                  onClick={handleDuplicar}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl font-medium"
+                >
+                  <Copy className="w-4 h-4 text-blue-400" />
+                  <span>Duplicar este Plano</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportar}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl font-medium"
+                >
+                  <Download className="w-4 h-4 text-purple-400" />
+                  <span>Baixar Arquivo JSON</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl font-medium"
+                >
+                  <Upload className="w-4 h-4 text-amber-400" />
+                  <span>Restaurar / Importar</span>
+                </button>
                 {cenarios.length > 1 && (
-                  <select
-                    value={cenarioAtual.id}
-                    onChange={(e) => handleSelectCenario(e.target.value)}
-                    className="text-xs font-semibold text-slate-400 hover:text-white bg-slate-950/80 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={handleExcluir}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-950/40 rounded-xl font-medium border-t border-slate-800"
                   >
-                    {cenarios.map(c => (
-                      <option key={c.id} value={c.id} className="bg-slate-900 text-white">
-                        Alternar: {c.nome} {c.isBase ? '(Base)' : ''}
-                      </option>
-                    ))}
-                  </select>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Excluir este Plano</span>
+                  </button>
                 )}
               </div>
             )}
-
-            {/* Descrição do Cenário (com Edição) */}
-            {isEditingDesc ? (
-              <div className="flex items-center gap-2 mt-1 max-w-lg">
-                <input
-                  type="text"
-                  value={editDescValue}
-                  onChange={(e) => setEditDescValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveDesc();
-                    if (e.key === 'Escape') setIsEditingDesc(false);
-                  }}
-                  autoFocus
-                  placeholder="Descrição da estratégia..."
-                  className="text-xs text-white bg-slate-950 px-2.5 py-1 rounded-lg border border-emerald-500 focus:outline-none w-full"
-                />
-                <button
-                  type="button"
-                  onClick={handleSaveDesc}
-                  className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
-                >
-                  <Check className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingDesc(false)}
-                  className="p-1 bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-xs text-slate-400 line-clamp-1">
-                  {cenarioAtual.descricao || 'Sem descrição definida.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditDescValue(cenarioAtual.descricao || '');
-                    setIsEditingDesc(true);
-                  }}
-                  title="Editar descrição"
-                  className="text-slate-500 hover:text-slate-300 transition-colors p-0.5"
-                >
-                  <Pencil className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Botões de Ação Principais */}
-          <div className="flex flex-wrap items-center gap-2">
-            
-            {/* Botão de Destaque: Preencher com IA */}
-            <button
-              type="button"
-              onClick={() => setModalIAOpen(true)}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 hover:from-emerald-500 hover:to-teal-400 shadow-lg shadow-emerald-950/60 flex items-center gap-2 transition-all transform active:scale-95"
-            >
-              <Sparkles className="w-4 h-4 text-emerald-100 animate-pulse" />
-              <span>Preencher com IA</span>
-            </button>
-
-            {/* Novo Cenário */}
-            <button
-              type="button"
-              onClick={handleNovoCenario}
-              title="Criar novo cenário"
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-
-            {/* Duplicar */}
-            <button
-              type="button"
-              onClick={handleDuplicar}
-              title="Duplicar cenário atual"
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
-
-            {/* Exportar JSON */}
-            <button
-              type="button"
-              onClick={handleExportar}
-              title="Exportar JSON local"
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-
-            {/* Importar JSON */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title="Importar JSON de cenário"
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
-            >
-              <Upload className="w-4 h-4" />
-            </button>
-
-            {/* Excluir */}
-            {cenarios.length > 1 && (
-              <button
-                type="button"
-                onClick={handleExcluir}
-                title="Excluir cenário"
-                className="p-2.5 rounded-xl bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-300 border border-slate-700 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Status de Salvamento Automático */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px] text-slate-400">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${saveStatus === 'salvo' ? 'bg-emerald-400' : saveStatus === 'salvando' ? 'bg-amber-400 animate-pulse' : 'bg-red-400'}`} />
-            <span>
-              {saveStatus === 'salvo' && 'Armazenado no servidor (JSON local)'}
-              {saveStatus === 'salvando' && 'Salvando alterações...'}
-              {saveStatus === 'erro' && 'Erro ao persistir localmente'}
+        {/* Linha 3: Botão de Destaque: FALAR OU PREENCHER COM IA */}
+        <button
+          type="button"
+          onClick={() => setModalIAOpen(true)}
+          className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-sm sm:text-base shadow-xl shadow-emerald-950/50 flex items-center justify-center gap-2.5 transition-all transform active:scale-98"
+        >
+          <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <Mic className="w-4 h-4 text-white animate-pulse" />
+          </div>
+          <span className="tracking-wide">Falar ou Preencher com IA</span>
+          <Sparkles className="w-4 h-4 text-amber-200" />
+        </button>
+
+      </div>
+
+      {/* 2. O TERMÔMETRO DO PRODUTOR (O que sobra no bolso, preço de empate e caixa) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        
+        {/* Card 1: Lucro Líquido no Bolso */}
+        <div className="sm:col-span-2 bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 border-2 border-emerald-500/40 rounded-3xl p-5 shadow-xl relative overflow-hidden">
+          <div className="flex items-center justify-between text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
+            <span className="flex items-center gap-1.5">
+              <Wallet className="w-4 h-4" />
+              Lucro Estimado no Bolso
+            </span>
+            <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full text-[11px] border border-emerald-500/30">
+              Margem {r.margemLiquida}%
             </span>
           </div>
-          <span className="text-slate-500">
-            Atualizado às {new Date(cenarioAtual.dataAtualizacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        </div>
-      </div>
 
-      {/* 2. Grid de Cards Principais de Indicadores (KPIs Estratégicos) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        
-        {/* Lucro Projetado */}
-        <div className="col-span-2 sm:col-span-1 bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-4 shadow-lg">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span className="font-semibold">Lucro Projetado</span>
-            <DollarSign className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-emerald-400">
+          <div className="text-3xl sm:text-5xl font-black text-white tracking-tight mt-1">
             R$ {r.lucro.toLocaleString('pt-BR')}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
-            Margem Líquida: <strong className="text-white">{r.margemLiquida}%</strong>
+
+          <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
+            <div>
+              Receita Total da Venda: <strong className="text-slate-200">R$ {r.receitaLiquida.toLocaleString('pt-BR')}</strong>
+            </div>
+            {diferencaLucroBase !== 0 && !cenarioAtual.isBase && (
+              <div className={`font-bold flex items-center gap-1 ${diferencaLucroBase > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                {diferencaLucroBase > 0 ? '+' : ''}R$ {diferencaLucroBase.toLocaleString('pt-BR')} que o plano base
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Receita Líquida */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span className="font-semibold">Receita Líquida</span>
-            <TrendingUp className="w-4 h-4 text-blue-400" />
-          </div>
-          <div className="text-lg sm:text-xl font-bold text-white">
-            R$ {r.receitaLiquida.toLocaleString('pt-BR')}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1">
-            Bruta: R$ {(r.receitaBruta / 1000).toFixed(0)} mil
-          </div>
-        </div>
-
-        {/* Capital Necessário (Maior Déficit) */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span className="font-semibold">Capital Necessário</span>
-            <Calendar className="w-4 h-4 text-purple-400" />
-          </div>
-          <div className="text-lg sm:text-xl font-bold text-white">
-            R$ {r.capitalNecessario.toLocaleString('pt-BR')}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1 truncate">
-            {r.mesCriticoCaixa}
-          </div>
-        </div>
-
-        {/* Produção Arrobas */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span className="font-semibold">Produção Total</span>
-            <Layers className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-lg sm:text-xl font-bold text-white">
-            {r.producaoArrobas.toLocaleString('pt-BR')} @
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1">
-            {r.arrobasHectare} @/ha • {r.animaisAbatidos} cab
-          </div>
-        </div>
-
-        {/* Ponto de Equilíbrio e Risco */}
-        <div className="col-span-2 sm:col-span-1 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+        {/* Card 2: Preço de Empate (Breakeven Didático) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-3">
           <div>
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-              <span className="font-semibold">Equilíbrio (@)</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${r.scoreRisco <= 25 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : r.scoreRisco <= 50 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
-                Risco {r.scoreRisco}/100
+            <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <span className="flex items-center gap-1.5">
+                <Scale className="w-4 h-4 text-amber-400" />
+                Preço de Empate
+              </span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                r.margemSeguranca >= 15 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+              }`}>
+                +{r.margemSeguranca}% folga
               </span>
             </div>
-            <div className="text-lg sm:text-xl font-bold text-white">
+
+            <div className="text-2xl sm:text-3xl font-black text-white mt-1">
               R$ {r.precoEquilibrio.toFixed(2)}
+              <span className="text-xs font-normal text-slate-400 ml-1">/@</span>
             </div>
+
+            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+              Preço mínimo de venda para não ter prejuízo. Vendendo a R$ {v.precoProjetadoArroba.toFixed(2)}, você está protegido.
+            </p>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
-            Margem segur.: <strong className={r.margemSeguranca >= 10 ? 'text-emerald-400' : 'text-amber-400'}>{r.margemSeguranca}%</strong>
+
+          {/* Risco da Operação */}
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+            <span className="text-slate-400">Risco:</span>
+            <span className={`font-bold ${
+              r.scoreRisco <= 25 ? 'text-emerald-400' : r.scoreRisco <= 50 ? 'text-amber-400' : 'text-red-400'
+            }`}>
+              {r.scoreRisco}/100 ({r.classificacaoRisco})
+            </span>
           </div>
         </div>
 
       </div>
 
-      {/* 3. Navegação por Abas Responsiva (Mobile-First) */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-1">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          
-          <button
-            type="button"
-            onClick={() => setActiveTab('variaveis')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'variaveis' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>Variáveis da Operação</span>
-          </button>
+      {/* 3. NAVEGAÇÃO DE ABAS 100% DIDÁTICA NO MOBILE */}
+      <div className="grid grid-cols-4 gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl text-xs font-bold">
+        
+        <button
+          type="button"
+          onClick={() => setActiveTab('simulador')}
+          className={`py-2.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+            activeTab === 'simulador'
+              ? 'bg-emerald-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Ajustar Contas</span>
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('resultados')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'resultados' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Fluxo de Caixa & Gráficos</span>
-          </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('resultado')}
+          className={`py-2.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+            activeTab === 'resultado'
+              ? 'bg-emerald-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          <span>Mês a Mês</span>
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('sensibilidade')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'sensibilidade' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>Sensibilidade & Equilíbrio</span>
-          </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('diagnostico')}
+          className={`py-2.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+            activeTab === 'diagnostico'
+              ? 'bg-emerald-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <AlertTriangle className="w-4 h-4 text-amber-400" />
+          <span>Dicas ({cenarioAtual.alertas.length})</span>
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('alertas')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'alertas' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            <span>Insights ({cenarioAtual.alertas.length})</span>
-          </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('comparador')}
+          className={`py-2.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+            activeTab === 'comparador'
+              ? 'bg-emerald-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Comparar</span>
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('comparar')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'comparar' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Comparar Cenários</span>
-          </button>
-
-        </div>
-
-        {/* Alternador Rápido vs Avançado quando na aba Variáveis */}
-        {activeTab === 'variaveis' && (
-          <button
-            type="button"
-            onClick={() => setModoRapido(!modoRapido)}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-medium text-slate-300 hover:text-white transition-colors"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-            <span>{modoRapido ? 'Modo Rápido (10 vars)' : 'Modo Completo'}</span>
-          </button>
-        )}
       </div>
 
-      {/* 4. Conteúdo das Abas */}
-      
-      {/* ABA 1: VARIÁVEIS */}
-      {activeTab === 'variaveis' && (
-        <div className="space-y-6 animate-fadeIn">
-          
-          {/* Seletor Rápido vs Completo no Mobile */}
-          <div className="sm:hidden flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-            <span className="text-slate-400">Exibição de variáveis:</span>
-            <button
-              type="button"
-              onClick={() => setModoRapido(!modoRapido)}
-              className="px-2.5 py-1 rounded-md bg-slate-800 text-emerald-400 font-bold border border-slate-700"
-            >
-              {modoRapido ? 'Modo Rápido' : 'Modo Avançado'}
-            </button>
-          </div>
+      {/* 4. CONTEÚDO DAS ABAS */}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      {/* ABA 1: AJUSTAR SIMULAÇÃO (CONTROLES GRANDES E DIDÁTICOS PARA O PRODUTOR) */}
+      {activeTab === 'simulador' && (
+        <div className="space-y-4 animate-fadeIn">
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             
-            {/* Bloco 1: Mercado & Preços */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
-                <DollarSign className="w-4 h-4 text-emerald-400" />
-                Mercado & Cotações
-              </h4>
-
-              {/* Preço Projetado da Arroba */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Preço Projetado da Arroba (@)</span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500">R$</span>
-                    <input
-                      type="number"
-                      value={v.precoProjetadoArroba}
-                      onChange={(e) => updateVariable('precoProjetadoArroba', parseFloat(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                    />
-                  </div>
+            {/* CONTROLE 1: PREÇO DA ARROBA */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Preço de Venda da Arroba (@)
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Quanto você espera receber no frigorífico</p>
                 </div>
+                <div className="text-lg font-black text-emerald-400">
+                  R$ {v.precoProjetadoArroba.toFixed(2)}
+                </div>
+              </div>
+
+              {/* Botões Tácteis Grandões de + e - */}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('precoProjetadoArroba', -5, 200, 500)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  - R$ 5
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('precoProjetadoArroba', -1, 200, 500)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  - R$ 1
+                </button>
                 <input
                   type="range"
                   min="240"
@@ -717,110 +646,127 @@ export function SimulacaoCenáriosView() {
                   step="1"
                   value={v.precoProjetadoArroba}
                   onChange={(e) => updateVariable('precoProjetadoArroba', parseFloat(e.target.value))}
-                  className="w-full accent-emerald-500 cursor-pointer"
+                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
                 />
-                <div className="flex justify-between text-[10px] text-slate-500">
-                  <span>R$ 240</span>
-                  <span>R$ 330</span>
-                  <span>R$ 420</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('precoProjetadoArroba', 1, 200, 500)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  + R$ 1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('precoProjetadoArroba', 5, 200, 500)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  + R$ 5
+                </button>
               </div>
-
-              {/* Preço do Bezerro / Boi Magro */}
-              {!modoRapido && (
-                <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-300">Preço do Boi Magro (R$/cab)</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-slate-500">R$</span>
-                      <input
-                        type="number"
-                        value={v.precoBoiMagro}
-                        onChange={(e) => updateVariable('precoBoiMagro', parseFloat(e.target.value) || 0)}
-                        className="w-24 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                      />
-                    </div>
-                  </div>
-                  <input
-                    type="range"
-                    min="2500"
-                    max="5500"
-                    step="50"
-                    value={v.precoBoiMagro}
-                    onChange={(e) => updateVariable('precoBoiMagro', parseFloat(e.target.value))}
-                    className="w-full accent-emerald-500 cursor-pointer"
-                  />
-                </div>
-              )}
-
-              {/* Preço do Milho */}
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Preço do Milho (R$/saca 60kg)</span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-500">R$</span>
-                    <input
-                      type="number"
-                      value={v.precoMilho}
-                      onChange={(e) => updateVariable('precoMilho', parseFloat(e.target.value) || 0)}
-                      className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                    />
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min="40"
-                  max="120"
-                  step="1"
-                  value={v.precoMilho}
-                  onChange={(e) => updateVariable('precoMilho', parseFloat(e.target.value))}
-                  className="w-full accent-emerald-500 cursor-pointer"
-                />
-              </div>
-
             </div>
 
-            {/* Bloco 2: Rebanho & Desempenho Animal */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
-                <Layers className="w-4 h-4 text-amber-400" />
-                Produção & Zootecnia
-              </h4>
-
-              {/* Quantidade de Animais */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Quantidade de Animais (Cabeças)</span>
-                  <input
-                    type="number"
-                    value={v.quantidadeAnimais}
-                    onChange={(e) => updateVariable('quantidadeAnimais', parseInt(e.target.value, 10) || 0)}
-                    className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                  />
+            {/* CONTROLE 2: QUANTIDADE DE BOIS */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Quantidade de Bois no Lote
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Cabeças que serão engordadas</p>
                 </div>
+                <div className="text-lg font-black text-white">
+                  {v.quantidadeAnimais} <span className="text-xs font-normal text-slate-400">cab</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('quantidadeAnimais', -50, 10, 5000)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  -50
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('quantidadeAnimais', -10, 10, 5000)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  -10
+                </button>
                 <input
                   type="range"
-                  min="50"
-                  max="3000"
+                  min="20"
+                  max="2000"
                   step="10"
                   value={v.quantidadeAnimais}
                   onChange={(e) => updateVariable('quantidadeAnimais', parseInt(e.target.value, 10))}
-                  className="w-full accent-emerald-500 cursor-pointer"
+                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
                 />
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('quantidadeAnimais', 10, 10, 5000)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  +10
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('quantidadeAnimais', 50, 10, 5000)}
+                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  +50
+                </button>
+              </div>
+            </div>
+
+            {/* CONTROLE 3: GANHO MÉDIO DIÁRIO (GMD) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Ganho de Peso por Dia (GMD)
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Quantos quilos o boi engorda por dia</p>
+                </div>
+                <div className="text-lg font-black text-amber-400">
+                  {v.gmd.toFixed(2)} <span className="text-xs font-normal text-slate-400">kg/dia</span>
+                </div>
               </div>
 
-              {/* Ganho Médio Diário (GMD) */}
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Ganho Médio Diário (GMD kg/dia)</span>
-                  <input
-                    type="number"
-                    step="0.05"
-                    value={v.gmd}
-                    onChange={(e) => updateVariable('gmd', parseFloat(e.target.value) || 0)}
-                    className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                  />
-                </div>
+              {/* Botões Rápidos por Sistema Produtivo */}
+              <div className="flex items-center gap-1.5 pb-1">
+                <button
+                  type="button"
+                  onClick={() => updateVariable('gmd', 0.65)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 0.65 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                >
+                  Pasto (0.65)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateVariable('gmd', 1.05)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 1.05 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                >
+                  Semi (1.05)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateVariable('gmd', 1.45)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 1.45 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                >
+                  Confinamento (1.45)
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('gmd', -0.05, 0.3, 2.0)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  -0.05
+                </button>
                 <input
                   type="range"
                   min="0.4"
@@ -828,270 +774,308 @@ export function SimulacaoCenáriosView() {
                   step="0.05"
                   value={v.gmd}
                   onChange={(e) => updateVariable('gmd', parseFloat(e.target.value))}
-                  className="w-full accent-emerald-500 cursor-pointer"
+                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
                 />
-                <div className="flex justify-between text-[10px] text-slate-500">
-                  <span>0.4 kg (Pasto seco)</span>
-                  <span>1.0 kg (Semi)</span>
-                  <span>1.8 kg (Confin.)</span>
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('gmd', 0.05, 0.3, 2.0)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  +0.05
+                </button>
+              </div>
+            </div>
+
+            {/* CONTROLE 4: DIAS DE TRATO (PERMANÊNCIA) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Dias de Permanência / Trato
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Duração do ciclo até a venda</p>
+                </div>
+                <div className="text-lg font-black text-white">
+                  {v.diasPermanencia} <span className="text-xs font-normal text-slate-400">dias</span>
                 </div>
               </div>
 
-              {/* Dias de Permanência */}
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Dias de Permanência (Trato)</span>
-                  <input
-                    type="number"
-                    value={v.diasPermanencia}
-                    onChange={(e) => updateVariable('diasPermanencia', parseInt(e.target.value, 10) || 0)}
-                    className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                  />
-                </div>
+              {/* Botões Rápidos */}
+              <div className="flex items-center gap-1.5 pb-1">
+                {[60, 90, 120, 180].map((dias) => (
+                  <button
+                    key={dias}
+                    type="button"
+                    onClick={() => updateVariable('diasPermanencia', dias)}
+                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.diasPermanencia === dias ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                  >
+                    {dias} dias
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('diasPermanencia', -10, 30, 365)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  -10
+                </button>
                 <input
                   type="range"
                   min="30"
-                  max="365"
+                  max="240"
                   step="5"
                   value={v.diasPermanencia}
                   onChange={(e) => updateVariable('diasPermanencia', parseInt(e.target.value, 10))}
-                  className="w-full accent-emerald-500 cursor-pointer"
+                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
                 />
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('diasPermanencia', 10, 30, 365)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  +10
+                </button>
               </div>
-
             </div>
 
-            {/* Bloco 3: Nutrição & Custos da Operação */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
-                <Zap className="w-4 h-4 text-emerald-400" />
-                Nutrição & Estratégia Alimentar
-              </h4>
-
-              {/* Estratégia Nutricional */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Estratégia Nutricional:</label>
-                <select
-                  value={v.estrategiaNutricional}
-                  onChange={(e) => updateVariable('estrategiaNutricional', e.target.value as any)}
-                  className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:outline-none"
-                >
-                  <option value="pasto_mineral">Pasto + Sal Mineral (Custo Baixo, GMD 0.5-0.7kg)</option>
-                  <option value="proteinado_aguas">Pasto + Proteinado Águas (GMD 0.7-0.9kg)</option>
-                  <option value="proteinado_seca">Pasto + Proteinado Seca (GMD 0.6-0.8kg)</option>
-                  <option value="semi_confinamento">Semi-confinamento (GMD 1.0-1.3kg)</option>
-                  <option value="confinamento_total">Confinamento Total (GMD 1.3-1.7kg)</option>
-                </select>
+            {/* CONTROLE 5: PESO DE ENTRADA & SAÍDA */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Peso Vivo de Entrada
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Peso médio que o animal entra no lote</p>
+                </div>
+                <div className="text-lg font-black text-white">
+                  {v.pesoMedioAtual} <span className="text-xs font-normal text-slate-400">kg</span>
+                </div>
               </div>
 
-              {/* Custo Animal/Dia */}
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Custo Alimentar (R$/animal/dia)</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={v.custoAnimalDia}
-                    onChange={(e) => updateVariable('custoAnimalDia', parseFloat(e.target.value) || 0)}
-                    className="w-20 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                  />
-                </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('pesoMedioAtual', -10, 180, 550)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  -10kg
+                </button>
                 <input
                   type="range"
-                  min="1"
-                  max="20"
-                  step="0.2"
+                  min="200"
+                  max="480"
+                  step="5"
+                  value={v.pesoMedioAtual}
+                  onChange={(e) => updateVariable('pesoMedioAtual', parseInt(e.target.value, 10))}
+                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('pesoMedioAtual', 10, 180, 550)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  +10kg
+                </button>
+              </div>
+
+              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+                <span>Peso final projetado: <strong className="text-emerald-400">{Math.round(v.pesoMedioAtual + v.gmd * v.diasPermanencia)} kg</strong></span>
+                <span>Rendimento carcaça: <strong className="text-white">{(v.rendimentoCarcaca * 100).toFixed(0)}%</strong></span>
+              </div>
+            </div>
+
+            {/* CONTROLE 6: CUSTO DA COMIDA POR DIA */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Custo de Comida por Boi / Dia
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Gasto diário com ração, sal e trato</p>
+                </div>
+                <div className="text-lg font-black text-amber-400">
+                  R$ {v.custoAnimalDia.toFixed(2)}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('custoAnimalDia', -0.5, 1, 30)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  - R$ 0.50
+                </button>
+                <input
+                  type="range"
+                  min="2"
+                  max="18"
+                  step="0.5"
                   value={v.custoAnimalDia}
                   onChange={(e) => updateVariable('custoAnimalDia', parseFloat(e.target.value))}
-                  className="w-full accent-emerald-500 cursor-pointer"
+                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
                 />
-              </div>
-
-              {/* Custos Fixos Mensais */}
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Custos Fixos Mensais da Fazenda (R$)</span>
-                  <input
-                    type="number"
-                    step="1000"
-                    value={v.custosFixosMensais}
-                    onChange={(e) => updateVariable('custosFixosMensais', parseFloat(e.target.value) || 0)}
-                    className="w-24 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                  />
-                </div>
-                <input
-                  type="range"
-                  min="5000"
-                  max="80000"
-                  step="1000"
-                  value={v.custosFixosMensais}
-                  onChange={(e) => updateVariable('custosFixosMensais', parseFloat(e.target.value))}
-                  className="w-full accent-emerald-500 cursor-pointer"
-                />
-              </div>
-
-            </div>
-
-            {/* Bloco 4: Pastagem, Clima & Financeiro */}
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
-              <h4 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                Pastagem, Clima & Capital
-              </h4>
-
-              {/* Cenário Climático */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Cenário Climático:</label>
-                <select
-                  value={v.cenarioClimatico}
-                  onChange={(e) => updateVariable('cenarioClimatico', e.target.value as any)}
-                  className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs focus:outline-none"
+                <button
+                  type="button"
+                  onClick={() => adjustNumber('custoAnimalDia', 0.5, 1, 30)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
-                  <option value="normal">Normal (Chuvas regulares)</option>
-                  <option value="seca_moderada">Seca Moderada (-15% pasto)</option>
-                  <option value="seca_severa">Seca Severa (-25% pasto, risco elevado)</option>
-                  <option value="excesso_chuva">Excesso de Chuva</option>
-                </select>
+                  + R$ 0.50
+                </button>
               </div>
 
-              {/* Capital Inicial Disponível */}
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Capital Próprio Disponível (R$)</span>
-                  <input
-                    type="number"
-                    step="20000"
-                    value={v.capitalDisponivel}
-                    onChange={(e) => updateVariable('capitalDisponivel', parseFloat(e.target.value) || 0)}
-                    className="w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white text-right font-bold text-xs"
-                  />
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="2000000"
-                  step="25000"
-                  value={v.capitalDisponivel}
-                  onChange={(e) => updateVariable('capitalDisponivel', parseFloat(e.target.value))}
-                  className="w-full accent-emerald-500 cursor-pointer"
-                />
+              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+                <span>Custo alimentar no período: <strong className="text-white">R$ {r.custoAlimentacao.toLocaleString('pt-BR')}</strong></span>
               </div>
-
-              {/* Mortalidade Esperada */}
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-300">Mortalidade Esperada (%)</span>
-                  <span className="font-bold text-white">{(v.mortalidade * 100).toFixed(1)}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="0.05"
-                  step="0.005"
-                  value={v.mortalidade}
-                  onChange={(e) => updateVariable('mortalidade', parseFloat(e.target.value))}
-                  className="w-full accent-emerald-500 cursor-pointer"
-                />
-              </div>
-
             </div>
 
+          </div>
+
+          {/* ACORDEÃO DE CUSTOS DETALHADOS (Simples e Expansível) */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedCosts(!showAdvancedCosts)}
+              className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-850 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <Zap className="w-4 h-4 text-emerald-400" />
+                <div>
+                  <h4 className="text-xs font-bold text-white">Outros Custos da Fazenda</h4>
+                  <p className="text-[11px] text-slate-400">Custos fixos, remédios, frete e pastagem</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <span>{showAdvancedCosts ? 'Ocultar' : 'Ajustar'}</span>
+                {showAdvancedCosts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </div>
+            </button>
+
+            {showAdvancedCosts && (
+              <div className="p-4 border-t border-slate-800 space-y-4 text-xs animate-fadeIn bg-slate-950/40">
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  
+                  {/* Custos Fixos */}
+                  <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <span className="font-semibold text-slate-300">Custos Fixos Mensais (R$)</span>
+                    <input
+                      type="number"
+                      step="1000"
+                      value={v.custosFixosMensais}
+                      onChange={(e) => updateVariable('custosFixosMensais', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
+                    />
+                    <p className="text-[10px] text-slate-500">Funcionários, energia, manutenção</p>
+                  </div>
+
+                  {/* Sanitário */}
+                  <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <span className="font-semibold text-slate-300">Vacinas e Remédios (R$/cab/ano)</span>
+                    <input
+                      type="number"
+                      step="5"
+                      value={v.custosSanitariosCabecaAno}
+                      onChange={(e) => updateVariable('custosSanitariosCabecaAno', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
+                    />
+                    <p className="text-[10px] text-slate-500">Vermífugo, aftosa, mineral sanitário</p>
+                  </div>
+
+                  {/* Clima */}
+                  <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <span className="font-semibold text-slate-300">Condição do Clima</span>
+                    <select
+                      value={v.cenarioClimatico}
+                      onChange={(e) => updateVariable('cenarioClimatico', e.target.value as any)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
+                    >
+                      <option value="normal">Normal (Chuva adequada)</option>
+                      <option value="seca_moderada">Seca Moderada</option>
+                      <option value="seca_severa">Seca Severa (Pasto seco)</option>
+                    </select>
+                    <p className="text-[10px] text-slate-500">Impacta disponibilidade de capim</p>
+                  </div>
+
+                </div>
+
+              </div>
+            )}
           </div>
 
         </div>
       )}
 
-      {/* ABA 2: RESULTADOS & FLUXO DE CAIXA */}
-      {activeTab === 'resultados' && (
-        <div className="space-y-6 animate-fadeIn">
+      {/* ABA 2: RESULTADOS MÊS A MÊS (FLUXO DE CAIXA DIDÁTICO) */}
+      {activeTab === 'resultado' && (
+        <div className="space-y-4 animate-fadeIn">
           
-          {/* Gráfico de Fluxo de Caixa Mensal */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h4 className="text-sm font-bold text-white flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-emerald-400" />
-                  Projeção de Fluxo de Caixa (Mês a Mês)
+                  Quando entra e sai dinheiro da fazenda?
                 </h4>
                 <p className="text-xs text-slate-400">
-                  Receitas de venda vs despesas com nutrição, custos fixos e insumos
+                  Custos mensais de alimentação e o momento das vendas
                 </p>
               </div>
 
               {r.capitalNecessario > 0 ? (
-                <div className="px-3 py-1 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold">
-                  Maior déficit: R$ {r.capitalNecessario.toLocaleString('pt-BR')} ({r.mesCriticoCaixa})
+                <div className="px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-bold">
+                  Atenção: Necessidade de R$ {r.capitalNecessario.toLocaleString('pt-BR')} em {r.mesCriticoCaixa}
                 </div>
               ) : (
-                <div className="px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                  Caixa positivo em todo o ciclo
+                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                  Caixa equilibrado durante toda a operação
                 </div>
               )}
             </div>
 
-            <div className="h-64 sm:h-80 w-full">
+            {/* Gráfico de Barras */}
+            <div className="h-60 sm:h-72 w-full pt-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={r.fluxoCaixa} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis dataKey="mes" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
+                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `R$${(val / 1000).toFixed(0)}k`} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
                     formatter={(val: any) => [`R$ ${Number(val).toLocaleString('pt-BR')}`, '']}
                   />
                   <Legend />
-                  <Bar dataKey="receitas" name="Receita" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="custos" name="Custos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="receitas" name="Recebimento (Venda)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="custos" name="Desembolso (Custos)" fill="#ef4444" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Gráfico de Saldo Acumulado */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
-            <h4 className="text-sm font-bold text-white flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-blue-400" />
-              Evolução do Saldo Acumulado de Caixa
-            </h4>
-            <div className="h-48 sm:h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={r.fluxoCaixa} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="mes" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
-                    formatter={(val: any) => [`R$ ${Number(val).toLocaleString('pt-BR')}`, 'Saldo']}
-                  />
-                  <Line type="monotone" dataKey="saldoAcumulado" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Tabela do Fluxo de Caixa */}
-          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/60">
-            <table className="w-full text-left text-xs whitespace-nowrap">
-              <thead className="bg-slate-900 border-b border-slate-800 text-slate-400">
+          {/* Tabela de Evolução Simplificada */}
+          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/80">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-400">
                 <tr>
-                  <th className="p-3 font-semibold">Mês</th>
-                  <th className="p-3 font-semibold">Receitas</th>
-                  <th className="p-3 font-semibold">Custos</th>
-                  <th className="p-3 font-semibold">Saldo do Mês</th>
-                  <th className="p-3 font-semibold">Saldo Acumulado</th>
+                  <th className="p-3 font-bold">Mês</th>
+                  <th className="p-3 font-bold">Recebimento</th>
+                  <th className="p-3 font-bold">Despesas</th>
+                  <th className="p-3 font-bold">Resultado do Mês</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {r.fluxoCaixa.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-800/30">
+                  <tr key={idx} className="hover:bg-slate-850">
                     <td className="p-3 font-bold text-white">{item.mes}</td>
-                    <td className="p-3 text-emerald-400">R$ {item.receitas.toLocaleString('pt-BR')}</td>
-                    <td className="p-3 text-red-400">R$ {item.custos.toLocaleString('pt-BR')}</td>
-                    <td className={`p-3 font-medium ${item.saldoMensal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      R$ {item.saldoMensal.toLocaleString('pt-BR')}
+                    <td className="p-3 text-emerald-400 font-semibold">
+                      {item.receitas > 0 ? `R$ ${item.receitas.toLocaleString('pt-BR')}` : '-'}
                     </td>
-                    <td className={`p-3 font-bold ${item.saldoAcumulado >= 0 ? 'text-slate-200' : 'text-red-400'}`}>
-                      R$ {item.saldoAcumulado.toLocaleString('pt-BR')}
+                    <td className="p-3 text-red-400 font-semibold">R$ {item.custos.toLocaleString('pt-BR')}</td>
+                    <td className={`p-3 font-bold ${item.saldoMensal >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      R$ {item.saldoMensal.toLocaleString('pt-BR')}
                     </td>
                   </tr>
                 ))}
@@ -1102,114 +1086,46 @@ export function SimulacaoCenáriosView() {
         </div>
       )}
 
-      {/* ABA 3: SENSIBILIDADE & PONTO DE EQUILÍBRIO */}
-      {activeTab === 'sensibilidade' && (
-        <div className="space-y-6 animate-fadeIn">
-          
-          {/* Card de Ponto de Equilíbrio em Grande Destaque (Seção 40) */}
-          <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900 to-slate-900 border border-emerald-500/40 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="text-xs uppercase font-bold text-emerald-400 tracking-wider">
-                Preço de Equilíbrio (Breakeven)
-              </div>
-              <div className="text-3xl sm:text-5xl font-black text-white mt-1">
-                R$ {r.precoEquilibrio.toFixed(2)}
-                <span className="text-sm font-normal text-slate-400 ml-2">/ arroba</span>
-              </div>
-              <p className="text-xs text-slate-400 mt-2">
-                Preço projetado de venda: <strong>R$ {v.precoProjetadoArroba.toFixed(2)}/@</strong> • Margem de Segurança: <strong className="text-emerald-400">+{r.margemSeguranca}%</strong>
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-xs space-y-1">
-              <div className="text-slate-400">Arrobas por Hectare: <strong className="text-white">{r.arrobasHectare} @/ha</strong></div>
-              <div className="text-slate-400">Lucro por Hectare: <strong className="text-emerald-400">R$ {r.lucroHectare.toLocaleString('pt-BR')}</strong></div>
-              <div className="text-slate-400">Retorno sobre Capital (ROI): <strong className="text-blue-400">{r.roi}%</strong></div>
-            </div>
-          </div>
-
-          {/* Análise de Sensibilidade: O que mais impacta meu resultado? (Seção 42) */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-4">
-            <div>
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-amber-400" />
-                O que mais impacta meu resultado financeiro?
-              </h4>
-              <p className="text-xs text-slate-400">
-                Simulação de oscilação de ±10% nas variáveis críticas da fazenda
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              {r.sensibilidade.map((item, idx) => (
-                <div key={idx} className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-bold text-white">{item.fator}</div>
-                    <div className="text-[11px] text-slate-400">
-                      Impacto total de amplitude: R$ {item.diferenca.toLocaleString('pt-BR')}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="text-red-400 font-medium">
-                      -10%: R$ {item.impactoMenos10.toLocaleString('pt-BR')}
-                    </span>
-                    <span className="text-emerald-400 font-medium">
-                      +10%: +R$ {item.impactoMais10.toLocaleString('pt-BR')}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* ABA 4: INSIGHTS & ALERTAS */}
-      {activeTab === 'alertas' && (
-        <div className="space-y-4 animate-fadeIn">
+      {/* ABA 3: DICAS & DIAGNÓSTICO (INSIGHTS DIDÁTICOS) */}
+      {activeTab === 'diagnostico' && (
+        <div className="space-y-3 animate-fadeIn">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
-              Diagnóstico Inteligente da Propriedade ({cenarioAtual.alertas.length})
+              Diagnóstico Automático da sua Operação
             </h4>
           </div>
 
           {cenarioAtual.alertas.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 bg-slate-900/50 rounded-2xl border border-slate-800">
-              Nenhum alerta ou risco identificado na configuração atual.
+            <div className="p-8 text-center text-slate-400 bg-slate-900 rounded-2xl border border-slate-800">
+              Operação muito equilibrada! Nenhum risco crítico identificado.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-2.5">
               {cenarioAtual.alertas.map((alerta) => {
                 const isCritico = alerta.tipo === 'critico';
                 const isRisco = alerta.tipo === 'risco';
                 const isOportunidade = alerta.tipo === 'oportunidade';
-                const isAtencao = alerta.tipo === 'atencao';
 
-                const borderColor = isCritico ? 'border-red-500/40 bg-red-950/20' : isRisco ? 'border-amber-500/40 bg-amber-950/20' : isOportunidade ? 'border-emerald-500/40 bg-emerald-950/20' : 'border-blue-500/40 bg-blue-950/20';
+                const bgBadge = isCritico ? 'bg-red-500/20 text-red-400 border-red-500/40' : isRisco ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : isOportunidade ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-blue-500/20 text-blue-400 border-blue-500/40';
 
                 return (
-                  <div key={alerta.id} className={`p-4 rounded-2xl border ${borderColor} space-y-2`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="font-bold text-sm text-white flex items-center gap-2">
-                        {isCritico && <span className="px-2 py-0.5 rounded-md bg-red-500/20 text-red-400 text-[10px] font-bold">CRÍTICO</span>}
-                        {isRisco && <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 text-[10px] font-bold">RISCO</span>}
-                        {isOportunidade && <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">OPORTUNIDADE</span>}
-                        {isAtencao && <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 text-[10px] font-bold">ATENÇÃO</span>}
-                        <span>{alerta.titulo}</span>
-                      </div>
+                  <div key={alerta.id} className="p-4 rounded-2xl border border-slate-800 bg-slate-900/90 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${bgBadge}`}>
+                        {alerta.tipo}
+                      </span>
+                      <h5 className="font-bold text-xs sm:text-sm text-white">{alerta.titulo}</h5>
                     </div>
 
-                    <p className="text-xs text-slate-300">{alerta.descricao}</p>
-                    <div className="text-xs text-slate-400">
-                      <strong>Impacto:</strong> {alerta.impacto}
-                    </div>
-
+                    <p className="text-xs text-slate-300 leading-relaxed">{alerta.descricao}</p>
+                    
                     {alerta.acaoRecomendada && (
-                      <div className="pt-2 border-t border-slate-800/60 text-xs text-emerald-300 font-medium">
-                        💡 <strong>Recomendação:</strong> {alerta.acaoRecomendada}
+                      <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-emerald-300 flex items-start gap-2">
+                        <span className="text-base">💡</span>
+                        <div>
+                          <strong>Dica Prática:</strong> {alerta.acaoRecomendada}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1220,8 +1136,8 @@ export function SimulacaoCenáriosView() {
         </div>
       )}
 
-      {/* ABA 5: COMPARAR CENÁRIOS */}
-      {activeTab === 'comparar' && (
+      {/* ABA 4: COMPARAR CENÁRIOS */}
+      {activeTab === 'comparador' && (
         <div className="animate-fadeIn">
           <ComparadorCenários
             cenarios={cenarios}
@@ -1231,7 +1147,7 @@ export function SimulacaoCenáriosView() {
         </div>
       )}
 
-      {/* Modal Preencher com IA */}
+      {/* Modal Preencher com IA (com Transcrição por Voz Nativa) */}
       <ModalPreencherIA
         isOpen={modalIAOpen}
         onClose={() => setModalIAOpen(false)}
@@ -1241,4 +1157,3 @@ export function SimulacaoCenáriosView() {
     </div>
   );
 }
-
