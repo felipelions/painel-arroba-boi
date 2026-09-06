@@ -1,7 +1,18 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Sparkles, X, Loader2, CheckCircle2, AlertCircle, ArrowRight, Lightbulb } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Sparkles,
+  X,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  Lightbulb,
+  Mic,
+  MicOff,
+  Volume2
+} from 'lucide-react';
 
 interface ModalPreencherIAProps {
   isOpen: boolean;
@@ -31,21 +42,138 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
   const [statusMessage, setStatusMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Estados de Reconhecimento de Voz Nativo do Navegador (Web Speech API)
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const [interimText, setInterimText] = useState('');
+  const recognitionRef = useRef<any>(null);
+
+  // Verifica suporte ao Web Speech API ao montar
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hasSpeech = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+      setSpeechSupported(hasSpeech);
+    }
+  }, []);
+
+  // Limpa estados ao fechar modal
   useEffect(() => {
     if (!isOpen) {
+      stopListening();
       setPrompt('');
       setLoading(false);
       setProgress(0);
       setStatusMessage('');
       setError(null);
+      setInterimText('');
     }
   }, [isOpen]);
+
+  // Função para Iniciar / Parar gravação de voz
+  function toggleListening() {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }
+
+  function startListening() {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognitionClass =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionClass) {
+      setSpeechSupported(false);
+      setError('Seu navegador não possui suporte à transcrição por voz nativa. Recomendamos Chrome, Edge ou Safari.');
+      return;
+    }
+
+    try {
+      setError(null);
+      const recognition = new SpeechRecognitionClass();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      let basePrompt = prompt;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setInterimText('');
+      };
+
+      recognition.onresult = (event: any) => {
+        let currentInterim = '';
+        let finalChunk = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcriptSegment = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalChunk += transcriptSegment + ' ';
+          } else {
+            currentInterim += transcriptSegment;
+          }
+        }
+
+        if (finalChunk) {
+          basePrompt = basePrompt ? `${basePrompt.trim()} ${finalChunk.trim()}` : finalChunk.trim();
+          setPrompt(basePrompt);
+        }
+
+        setInterimText(currentInterim);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Erro na transcrição de voz:', event.error);
+        if (event.error === 'not-allowed') {
+          setError('Acesso ao microfone foi negado no navegador. Habilite a permissão para falar.');
+        } else if (event.error !== 'no-speech') {
+          setError(`Erro no microfone: ${event.error}`);
+        }
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        setInterimText('');
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      console.error('Falha ao iniciar reconhecimento de voz:', err);
+      setError('Não foi possível iniciar o microfone.');
+      setIsListening(false);
+    }
+  }
+
+  function stopListening() {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignora
+      }
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+    setInterimText('');
+  }
 
   if (!isOpen) return null;
 
   async function handleProcessar() {
-    if (!prompt.trim()) {
-      setError('Por favor, escreva uma breve descrição do que deseja simular.');
+    // Para a gravação caso ainda esteja ativa
+    if (isListening) {
+      stopListening();
+    }
+
+    const finalPrompt = (prompt + ' ' + interimText).trim();
+
+    if (!finalPrompt) {
+      setError('Por favor, escreva ou fale uma breve descrição do que deseja simular.');
       return;
     }
 
@@ -69,7 +197,7 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
       const res = await fetch('/api/ai/preencher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt.trim() })
+        body: JSON.stringify({ prompt: finalPrompt })
       });
 
       clearTimeout(timer1);
@@ -112,11 +240,11 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 Preencher com IA
                 <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  OpenAI
+                  OpenAI + Voz
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Descreva sua operação em linguagem natural
+                Escreva ou fale sua operação pelo microfone
               </p>
             </div>
           </div>
@@ -138,7 +266,7 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
           <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-800/60 border border-slate-700/50 text-slate-300 text-xs">
             <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <p>
-              Escreva a quantidade de animais, peso de entrada/saída, GMD, dias de trato, custos diários ou valor projetado da arroba. O motor interpretará os dados e completará a simulação automaticamente.
+              Você pode <strong>digitar</strong> ou <strong>falar no microfone</strong> informando quantidade de animais, peso de entrada/saída, GMD, dias de trato, custos ou arroba desejada.
             </p>
           </div>
 
@@ -150,7 +278,7 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
                 <button
                   key={idx}
                   type="button"
-                  disabled={loading}
+                  disabled={loading || isListening}
                   onClick={() => setPrompt(ex.texto)}
                   className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all text-left disabled:opacity-50"
                 >
@@ -160,22 +288,76 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
             </div>
           </div>
 
+          {/* Botão e Banner de Voz Nativo do Navegador */}
+          {speechSupported && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={toggleListening}
+                className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border shadow-md active:scale-98 ${
+                  isListening
+                    ? 'bg-red-500/20 text-red-300 border-red-500/50 animate-pulse'
+                    : 'bg-slate-800 hover:bg-slate-750 text-emerald-400 border-emerald-500/30 hover:border-emerald-500/60'
+                }`}
+              >
+                {isListening ? (
+                  <>
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                    <MicOff className="w-4 h-4 text-red-400" />
+                    <span>Ouvindo sua voz... Toque para parar</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-4 h-4 text-emerald-400" />
+                    <span>Falar no Microfone (Transcrição Nativa)</span>
+                  </>
+                )}
+              </button>
+
+              {/* Feedback visual durante a fala */}
+              {isListening && (
+                <div className="p-3 rounded-xl bg-red-950/30 border border-red-500/30 text-xs text-red-200 flex items-center gap-2 animate-fadeIn">
+                  <Volume2 className="w-4 h-4 text-red-400 shrink-0 animate-bounce" />
+                  <span className="italic">
+                    {interimText ? `"${interimText}"` : 'Fale agora: o navegador transcreverá suas palavras em tempo real...'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Textarea */}
           <div className="space-y-1.5">
-            <label htmlFor="prompt-ia" className="block text-xs font-semibold text-slate-300">
-              Resumo da sua operação:
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="prompt-ia" className="block text-xs font-semibold text-slate-300">
+                Resumo da sua operação:
+              </label>
+              {prompt && !loading && (
+                <button
+                  type="button"
+                  onClick={() => setPrompt('')}
+                  className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  Limpar texto
+                </button>
+              )}
+            </div>
             <textarea
               id="prompt-ia"
               rows={4}
               disabled={loading}
-              value={prompt}
+              value={prompt + (interimText ? ` ${interimText}` : '')}
               onChange={(e) => {
                 setPrompt(e.target.value);
                 if (error) setError(null);
               }}
               placeholder="Ex: Quero fazer um confinamento com 350 bois de 390kg durante 85 dias com ganho de 1.4kg ao dia. Custo da diária a R$ 10,00 e quero vender a R$ 330/@..."
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 focus:border-emerald-500 rounded-xl text-white text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500/50 transition-all resize-none disabled:opacity-60"
+              className={`w-full px-3.5 py-2.5 bg-slate-950 border rounded-xl text-white text-sm focus:outline-none transition-all resize-none disabled:opacity-60 ${
+                isListening
+                  ? 'border-red-500/50 ring-1 ring-red-500/30'
+                  : 'border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50'
+              }`}
             />
           </div>
 
@@ -219,7 +401,7 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
           </button>
           <button
             type="button"
-            disabled={loading || !prompt.trim()}
+            disabled={loading || (!prompt.trim() && !interimText.trim())}
             onClick={handleProcessar}
             className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-950/50 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
           >
@@ -242,4 +424,3 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
     </div>
   );
 }
-
