@@ -32,7 +32,10 @@ import {
   Zap,
   Info,
   ChevronDown,
-  RefreshCw
+  RefreshCw,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -56,6 +59,10 @@ export function SimulacaoCenáriosView() {
   const [modalIAOpen, setModalIAOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'salvo' | 'salvando' | 'erro'>('salvo');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState('');
+  const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [editDescValue, setEditDescValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Carrega cenários iniciais
@@ -114,8 +121,44 @@ export function SimulacaoCenáriosView() {
     if (selected) {
       setCenarioAtual(selected);
       StorageService.setActiveScenarioId(selected.id);
+      setIsEditingTitle(false);
+      setIsEditingDesc(false);
       showToast(`Cenário "${selected.nome}" carregado.`);
     }
+  }
+
+  async function handleSaveTitle() {
+    if (!cenarioAtual) return;
+    const newName = editTitleValue.trim();
+    if (!newName) {
+      setIsEditingTitle(false);
+      return;
+    }
+    const updated: CenarioCompleto = {
+      ...cenarioAtual,
+      nome: newName,
+      dataAtualizacao: new Date().toISOString()
+    };
+    setCenarioAtual(updated);
+    setCenarios(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setIsEditingTitle(false);
+    await StorageService.saveScenario(updated);
+    showToast(`Título alterado para "${newName}"`);
+  }
+
+  async function handleSaveDesc() {
+    if (!cenarioAtual) return;
+    const newDesc = editDescValue.trim();
+    const updated: CenarioCompleto = {
+      ...cenarioAtual,
+      descricao: newDesc,
+      dataAtualizacao: new Date().toISOString()
+    };
+    setCenarioAtual(updated);
+    setCenarios(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setIsEditingDesc(false);
+    await StorageService.saveScenario(updated);
+    showToast('Descrição do cenário atualizada');
   }
 
   // Cria novo cenário
@@ -278,23 +321,126 @@ export function SimulacaoCenáriosView() {
               <span className="hidden sm:inline">{f.areaProdutiva} ha produtivos</span>
             </div>
             
-            <div className="flex items-center gap-2 mt-1">
-              <select
-                value={cenarioAtual.id}
-                onChange={(e) => handleSelectCenario(e.target.value)}
-                className="text-lg sm:text-2xl font-bold text-white bg-transparent border-b border-dashed border-slate-700 hover:border-emerald-500 focus:outline-none cursor-pointer"
-              >
-                {cenarios.map(c => (
-                  <option key={c.id} value={c.id} className="bg-slate-900 text-white text-sm">
-                    {c.nome} {c.isBase ? '(Base)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Título do Cenário (com Edição) */}
+            {isEditingTitle ? (
+              <div className="flex items-center gap-2 mt-1 max-w-lg">
+                <input
+                  type="text"
+                  value={editTitleValue}
+                  onChange={(e) => setEditTitleValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveTitle();
+                    if (e.key === 'Escape') setIsEditingTitle(false);
+                  }}
+                  autoFocus
+                  placeholder="Nome do cenário..."
+                  className="text-base sm:text-xl font-bold text-white bg-slate-950 px-3 py-1.5 rounded-xl border border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 w-full"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveTitle}
+                  title="Salvar título"
+                  className="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-colors shrink-0 shadow-md"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTitle(false)}
+                  title="Cancelar"
+                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-colors shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <h2 className="text-lg sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                  <span>{cenarioAtual.nome}</span>
+                  {cenarioAtual.isBase && (
+                    <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      Base
+                    </span>
+                  )}
+                </h2>
 
-            <p className="text-xs text-slate-400 mt-1 line-clamp-1">
-              {cenarioAtual.descricao}
-            </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditTitleValue(cenarioAtual.nome);
+                    setIsEditingTitle(true);
+                  }}
+                  title="Editar título do cenário"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800/80 transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Seletor de Cenários Rápido */}
+                {cenarios.length > 1 && (
+                  <select
+                    value={cenarioAtual.id}
+                    onChange={(e) => handleSelectCenario(e.target.value)}
+                    className="text-xs font-semibold text-slate-400 hover:text-white bg-slate-950/80 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
+                  >
+                    {cenarios.map(c => (
+                      <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                        Alternar: {c.nome} {c.isBase ? '(Base)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            {/* Descrição do Cenário (com Edição) */}
+            {isEditingDesc ? (
+              <div className="flex items-center gap-2 mt-1 max-w-lg">
+                <input
+                  type="text"
+                  value={editDescValue}
+                  onChange={(e) => setEditDescValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveDesc();
+                    if (e.key === 'Escape') setIsEditingDesc(false);
+                  }}
+                  autoFocus
+                  placeholder="Descrição da estratégia..."
+                  className="text-xs text-white bg-slate-950 px-2.5 py-1 rounded-lg border border-emerald-500 focus:outline-none w-full"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveDesc}
+                  className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingDesc(false)}
+                  className="p-1 bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-xs text-slate-400 line-clamp-1">
+                  {cenarioAtual.descricao || 'Sem descrição definida.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditDescValue(cenarioAtual.descricao || '');
+                    setIsEditingDesc(true);
+                  }}
+                  title="Editar descrição"
+                  className="text-slate-500 hover:text-slate-300 transition-colors p-0.5"
+                >
+                  <Pencil className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Botões de Ação Principais */}
