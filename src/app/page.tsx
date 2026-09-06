@@ -14,6 +14,7 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'simulacoes' | 'mercado'>('simulacoes');
 
   const {
+    data,
     snapshot,
     filteredData,
     loading,
@@ -23,7 +24,9 @@ export default function HomePage() {
     filtros,
     setFiltros,
     applyFilters,
-    exportCSV
+    resetFilters,
+    exportCSV,
+    options
   } = useMarketData();
 
   const latestValue = filteredData[filteredData.length - 1]?.valor || 0;
@@ -135,7 +138,29 @@ export default function HomePage() {
                   filtros={filtros}
                   onChange={setFiltros}
                   onApply={applyFilters}
+                  options={options}
+                  totalFiltered={filteredData.length}
+                  totalTotal={data.length}
+                  onReset={resetFilters}
                 />
+
+                {filteredData.length === 0 && (
+                  <div className="p-8 text-center bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
+                    <p className="text-slate-300 font-semibold text-sm">
+                      Nenhum registro encontrado para os filtros selecionados.
+                    </p>
+                    <p className="text-slate-500 text-xs">
+                      Tente ampliar o período ou selecionar outras opções.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
+                    >
+                      Restaurar Filtros Padrão
+                    </button>
+                  </div>
+                )}
 
                 {/* KPIs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
