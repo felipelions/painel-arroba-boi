@@ -186,30 +186,30 @@ export default function HomePage() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
                   <KPICard
                     title="Cotação Atual"
-                    value={`R$ ${latestValue.toFixed(2)}`}
+                    value={`R$ ${(latestValue ?? 0).toFixed(2)}`}
                     subtitle="por arroba"
                     trend={change > 0 ? 'up' : change < 0 ? 'down' : 'neutral'}
-                    trendValue={`${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`}
+                    trendValue={`${changePercent >= 0 ? '+' : ''}${(changePercent ?? 0).toFixed(2)}%`}
                     icon={<DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />}
                   />
 
                   <KPICard
                     title="Média Período"
-                    value={`R$ ${avgValue.toFixed(2)}`}
-                    subtitle={`${filteredData.length} registros`}
+                    value={`R$ ${(avgValue ?? 0).toFixed(2)}`}
+                    subtitle={`${filteredData?.length ?? 0} registros`}
                     icon={<TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />}
                   />
 
                   <KPICard
                     title="Mínima"
-                    value={`R$ ${minValue.toFixed(2)}`}
+                    value={`R$ ${(minValue ?? 0).toFixed(2)}`}
                     subtitle="menor valor"
                     icon={<Calendar className="w-4 h-4 sm:w-5 sm:h-5" />}
                   />
 
                   <KPICard
                     title="Máxima"
-                    value={`R$ ${maxValue.toFixed(2)}`}
+                    value={`R$ ${(maxValue ?? 0).toFixed(2)}`}
                     subtitle="maior valor"
                     icon={<Calendar className="w-4 h-4 sm:w-5 sm:h-5" />}
                   />

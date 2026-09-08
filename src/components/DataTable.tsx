@@ -59,7 +59,7 @@ export function DataTable({ data, onExport, loading }: DataTableProps) {
                     {formatDate(item.data)}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap font-black text-emerald-400">
-                    R$ {item.valor.toFixed(2)}
+                    R$ {(item?.valor ?? 0).toFixed(2)}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap text-slate-300 font-medium">
                     {item.fonte}

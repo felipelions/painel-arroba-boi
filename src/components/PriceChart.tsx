@@ -79,7 +79,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
               stroke="#64748b"
               tick={{ fill: '#64748b', fontSize: 10 }}
               tickLine={{ stroke: '#1e293b' }}
-              tickFormatter={(value) => `R$${value.toFixed(0)}`}
+              tickFormatter={(value) => `R$${(Number(value) || 0).toFixed(0)}`}
             />
             <Tooltip
               contentStyle={{
@@ -89,7 +89,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
                 color: '#fff',
                 fontSize: '12px'
               }}
-              formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Valor']}
+              formatter={(value: number) => [`R$ ${(Number(value) || 0).toFixed(2)}`, 'Valor']}
               labelStyle={{ color: '#94a3b8' }}
             />
             <Legend 

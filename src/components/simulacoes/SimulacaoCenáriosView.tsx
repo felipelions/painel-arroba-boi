@@ -622,25 +622,25 @@ export function SimulacaoCenáriosView() {
                 Lucro no Bolso
               </span>
               <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[10px] border border-emerald-500/30">
-                {r.margemLiquida}% margem
+                {r?.margemLiquida ?? 0}% margem
               </span>
             </div>
 
             <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
-              R$ {r.lucro.toLocaleString('pt-BR')}
+              R$ {(r?.lucro ?? 0).toLocaleString('pt-BR')}
             </div>
 
             {/* Destaque Didático: Sobra por Boi */}
             <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold text-xs">
               <span>Sobra limpa:</span>
-              <strong className="text-white text-sm">R$ {r.lucroPorCabeca.toLocaleString('pt-BR')}</strong>
+              <strong className="text-white text-sm">R$ {(r?.lucroPorCabeca ?? 0).toLocaleString('pt-BR')}</strong>
               <span className="text-[10px] font-normal text-slate-400">/boi</span>
             </div>
           </div>
 
           <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
             <span>Venda Líquida:</span>
-            <strong className="text-slate-200">R$ {r.receitaLiquida.toLocaleString('pt-BR')}</strong>
+            <strong className="text-slate-200">R$ {(r?.receitaLiquida ?? 0).toLocaleString('pt-BR')}</strong>
           </div>
         </div>
 
@@ -653,17 +653,17 @@ export function SimulacaoCenáriosView() {
                 Custo da @ Engordada
               </span>
               <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px] border border-amber-500/30">
-                +{ganhoPorArrobaProduzida >= 0 ? 'R$ ' + ganhoPorArrobaProduzida.toFixed(2) : '-'} /@
+                +{ganhoPorArrobaProduzida >= 0 ? 'R$ ' + (ganhoPorArrobaProduzida ?? 0).toFixed(2) : '-'} /@
               </span>
             </div>
 
             <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
-              R$ {r.custoArrobaProduzida.toFixed(2)}
+              R$ {(r?.custoArrobaProduzida ?? 0).toFixed(2)}
               <span className="text-xs font-normal text-slate-400 ml-1">/@</span>
             </div>
 
             <p className="text-[11px] text-slate-400 mt-1 leading-snug">
-              Custo para colocar cada @ na fazenda. Você vende a <strong className="text-white">R$ {v.precoProjetadoArroba.toFixed(2)}/@</strong>.
+              Custo para colocar cada @ na fazenda. Você vende a <strong className="text-white">R$ {(v?.precoProjetadoArroba ?? 0).toFixed(2)}/@</strong>.
             </p>
           </div>
 
@@ -720,7 +720,7 @@ export function SimulacaoCenáriosView() {
             </div>
 
             <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
-              R$ {r.precoEquilibrio.toFixed(2)}
+              R$ {(r?.precoEquilibrio ?? 0).toFixed(2)}
               <span className="text-xs font-normal text-slate-400 ml-1">/@</span>
             </div>
 
@@ -813,7 +813,7 @@ export function SimulacaoCenáriosView() {
                   <p className="text-[11px] text-slate-400">Preço esperado na data de abate</p>
                 </div>
                 <div className="text-lg font-black text-emerald-400">
-                  R$ {v.precoProjetadoArroba.toFixed(2)}
+                  R$ {(v?.precoProjetadoArroba ?? 0).toFixed(2)}
                 </div>
               </div>
 
@@ -1101,7 +1101,7 @@ export function SimulacaoCenáriosView() {
                   <p className="text-[11px] text-slate-400">Engorda diária por animal</p>
                 </div>
                 <div className="text-lg font-black text-amber-400">
-                  {v.gmd.toFixed(2)} <span className="text-xs font-normal text-slate-400">kg/dia</span>
+                  {(v?.gmd ?? 0).toFixed(2)} <span className="text-xs font-normal text-slate-400">kg/dia</span>
                 </div>
               </div>
 
@@ -1174,7 +1174,7 @@ export function SimulacaoCenáriosView() {
                   <p className="text-[11px] text-slate-400">Consumo em %PV e preço do kg</p>
                 </div>
                 <div className="text-lg font-black text-amber-400">
-                  R$ {v.custoAnimalDia.toFixed(2)}
+                  R$ {(v?.custoAnimalDia ?? 0).toFixed(2)}
                   <span className="text-xs font-normal text-slate-400 ml-1">/dia</span>
                 </div>
               </div>
