@@ -1,14 +1,21 @@
-const CACHE_NAME = 'arroba-boi-v2';
+const CACHE_NAME = 'arroba-boi-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
-  '/favicon.svg',
-  '/index.css'
+  '/favicon.svg'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async (cache) => {
+      for (const asset of STATIC_ASSETS) {
+        try {
+          await cache.add(asset);
+        } catch (err) {
+          console.warn('Cache asset skipped:', asset, err);
+        }
+      }
+    }).then(() => self.skipWaiting())
   );
 });
 
@@ -36,7 +43,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network First para rotas com fallback offline
+  // Network First com fallback seguro para cache offline
   event.respondWith(
     fetch(event.request)
       .then((response) => {
