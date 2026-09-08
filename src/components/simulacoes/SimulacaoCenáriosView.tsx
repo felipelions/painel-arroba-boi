@@ -59,6 +59,92 @@ import {
   Line
 } from 'recharts';
 
+function criarCenarioPadrao(): CenarioCompleto {
+  const fazenda: FazendaConfig = {
+    id: "fazenda_001",
+    nome: "Fazenda Boa Esperança",
+    estado: "SP",
+    municipio: "Sorocaba",
+    areaTotal: 1200,
+    areaProdutiva: 950,
+    areaPastagem: 800,
+    areaAgricola: 100,
+    areaConfinamento: 50,
+    modeloProducao: "ciclo_completo",
+    objetivoPrincipal: "maximizar_lucro",
+    moeda: "BRL"
+  };
+
+  const variaveis: CenarioVariaveis = {
+    precoArroba: 310,
+    precoProjetadoArroba: 322,
+    precoBezerro: 2400,
+    precoBoiMagro: 3800,
+    precoCompraArrobaBoiMagro: 380,
+    precoMilho: 65,
+    precoFareloSoja: 1800,
+    dolar: 5.60,
+    taxaJuros: 0.1125,
+    quantidadeAnimais: 500,
+    pesoMedioAtual: 410,
+    pesoMedioEntrada: 360,
+    pesoMedioSaida: 540,
+    gmd: 1.10,
+    rendimentoCarcaca: 0.54,
+    mortalidade: 0.01,
+    diasPermanencia: 120,
+    lotes: [],
+    novasCompras: [],
+    dataVenda: "2026-12-30",
+    bonificacaoArroba: 3.5,
+    descontoArroba: 1.5,
+    impostoSenarPercent: 1.63,
+    freteVendaCabeca: 35,
+    comissaoVendaPercent: 1.0,
+    tipoMedidaArea: "hectares",
+    areaPastagem: 800,
+    tipoPastagem: "Brachiaria Brizantha",
+    capacidadeSuporteUA: 1.3,
+    lotacaoAtualUA: 1.1,
+    custoManutencaoPastagemHaAno: 180,
+    reformaPastagemAreaHa: 50,
+    investimentoReformaHa: 1200,
+    estrategiaNutricional: "semi_confinamento",
+    custoAnimalDia: 6.80,
+    consumoRacaoPercentPV: 1.80,
+    precoKgRacao: 1.58,
+    arrendamentoMensal: 3500,
+    maoDeObraMensal: 1500,
+    custoSeguroCabeca: 5.0,
+    cenarioClimatico: "normal",
+    impactoPastoPercent: 0,
+    custosFixosMensais: 22000,
+    custosSanitariosCabecaAno: 65,
+    outrosCustosCabecaMes: 12,
+    capitalDisponivel: 600000,
+    financiamentoNecessario: 0,
+    taxaFinanciamentoAno: 0.115
+  };
+
+  const resultados = SimulationEngine.calculate(variaveis, fazenda);
+  const alertas = InsightEngine.generateInsights(variaveis, resultados, fazenda);
+
+  return {
+    id: "cenario_001",
+    nome: "Cenário Base - Planejamento 2027",
+    descricao: "Planejamento padrão da operação de recria e terminação em pasto com suplementação e semiconfinamento.",
+    isBase: true,
+    schemaVersion: "1.0.0",
+    dataCriacao: new Date().toISOString(),
+    dataAtualizacao: new Date().toISOString(),
+    fazenda,
+    periodo: { inicio: "2026-09", fim: "2027-09" },
+    variaveis,
+    resultados,
+    alertas
+  };
+}
+
 export function SimulacaoCenáriosView() {
   const [cenarios, setCenarios] = useState<CenarioCompleto[]>([]);
   const [cenarioAtual, setCenarioAtual] = useState<CenarioCompleto | null>(null);
@@ -88,20 +174,39 @@ export function SimulacaoCenáriosView() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      let list = await StorageService.listScenarios();
-      if (!list || list.length === 0) {
+      try {
+        let list = await StorageService.listScenarios();
+        if (!list || list.length === 0) {
+          const cenarioPadrao = criarCenarioPadrao();
+          await StorageService.saveScenario(cenarioPadrao);
+          list = [cenarioPadrao];
+        }
+        
+        // Garante resultados recalculados para todos os cenários
+        list = list.map(c => {
+          if (!c.resultados || typeof c.resultados.lucro !== 'number') {
+            const res = SimulationEngine.calculate(c.variaveis, c.fazenda);
+            const ins = InsightEngine.generateInsights(c.variaveis, res, c.fazenda);
+            return { ...c, resultados: res, alertas: ins };
+          }
+          return c;
+        });
+
+        setCenarios(list);
+        const activeId = StorageService.getActiveScenarioId();
+        const found = list.find(c => c.id === activeId) || list[0];
+        setCenarioAtual(found);
+        if (found?.variaveis?.tipoMedidaArea) {
+          setUnidadeArea(found.variaveis.tipoMedidaArea);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar cenários:', err);
         const cenarioPadrao = criarCenarioPadrao();
-        await StorageService.saveScenario(cenarioPadrao);
-        list = [cenarioPadrao];
+        setCenarios([cenarioPadrao]);
+        setCenarioAtual(cenarioPadrao);
+      } finally {
+        setLoading(false);
       }
-      setCenarios(list);
-      const activeId = StorageService.getActiveScenarioId();
-      const found = list.find(c => c.id === activeId) || list[0];
-      setCenarioAtual(found);
-      if (found.variaveis.tipoMedidaArea) {
-        setUnidadeArea(found.variaveis.tipoMedidaArea);
-      }
-      setLoading(false);
     }
     loadData();
   }, []);
@@ -1568,93 +1673,4 @@ export function SimulacaoCenáriosView() {
 
     </div>
   );
-}
-
-/**
- * Função utilitária para criar cenário base inicial completo caso a base de dados esteja vazia
- */
-function criarCenarioPadrao(): CenarioCompleto {
-  const fazenda: FazendaConfig = {
-    id: 'fazenda_001',
-    nome: 'Fazenda Boa Esperança',
-    estado: 'SP',
-    municipio: 'Sorocaba',
-    areaTotal: 1200,
-    areaProdutiva: 950,
-    areaPastagem: 800,
-    areaAgricola: 100,
-    areaConfinamento: 50,
-    modeloProducao: 'engorda',
-    objetivoPrincipal: 'maximizar_lucro',
-    moeda: 'BRL'
-  };
-
-  const variaveis: CenarioVariaveis = {
-    precoArroba: 310,
-    precoProjetadoArroba: 322,
-    precoBezerro: 2400,
-    precoBoiMagro: 4180,
-    precoCompraArrobaBoiMagro: 380,
-    precoMilho: 65,
-    precoFareloSoja: 1800,
-    dolar: 5.60,
-    taxaJuros: 0.1125,
-    quantidadeAnimais: 500,
-    pesoMedioAtual: 360,
-    pesoMedioEntrada: 330,
-    pesoMedioSaida: 480,
-    gmd: 1.50,
-    rendimentoCarcaca: 0.56,
-    mortalidade: 0.01,
-    diasPermanencia: 100,
-    lotes: [],
-    novasCompras: [],
-    dataVenda: '2026-12-30',
-    bonificacaoArroba: 3.5,
-    descontoArroba: 1.5,
-    impostoSenarPercent: 1.63,
-    freteVendaCabeca: 35,
-    comissaoVendaPercent: 1.0,
-    tipoMedidaArea: 'hectares',
-    areaPastagem: 800,
-    tipoPastagem: 'Brachiaria Brizantha',
-    capacidadeSuporteUA: 1.5,
-    lotacaoAtualUA: 1.1,
-    custoManutencaoPastagemHaAno: 180,
-    reformaPastagemAreaHa: 0,
-    investimentoReformaHa: 1200,
-    estrategiaNutricional: 'confinamento_total',
-    custoAnimalDia: 11.52,
-    consumoRacaoPercentPV: 1.80,
-    precoKgRacao: 1.58,
-    arrendamentoMensal: 3500,
-    maoDeObraMensal: 1500,
-    custoSeguroCabeca: 5.0,
-    cenarioClimatico: 'normal',
-    impactoPastoPercent: 0,
-    custosFixosMensais: 20000,
-    custosSanitariosCabecaAno: 65,
-    outrosCustosCabecaMes: 12,
-    capitalDisponivel: 600000,
-    financiamentoNecessario: 0,
-    taxaFinanciamentoAno: 0.115
-  };
-
-  const resultados = SimulationEngine.calculate(variaveis, fazenda);
-  const alertas = InsightEngine.generateInsights(variaveis, resultados, fazenda);
-
-  return {
-    id: 'cenario_base_001',
-    nome: 'Cenário Base - Planejamento Safra',
-    descricao: 'Planejamento padrão de engorda e terminação em confinamento com suplementação.',
-    isBase: true,
-    dataCriacao: new Date().toISOString(),
-    dataAtualizacao: new Date().toISOString(),
-    fazenda,
-    periodo: { inicio: '2026-09', fim: '2027-09' },
-    variaveis,
-    resultados,
-    alertas,
-    schemaVersion: '1.0.0'
-  };
 }
