@@ -111,6 +111,57 @@ export class InsightEngine {
       });
     }
 
+    // 7. Insight de Custo da Arroba Produzida vs Preço de Venda
+    if (resultados.custoArrobaProduzida > 0 && variaveis.precoProjetadoArroba > 0) {
+      const margemPorArroba = Math.round(variaveis.precoProjetadoArroba - resultados.custoArrobaProduzida);
+      if (margemPorArroba > 80) {
+        alertas.push({
+          id: 'oportunidade-arroba-barata',
+          tipo: 'oportunidade',
+          categoria: 'producao',
+          titulo: 'Engorda Altamente Eficiente',
+          descricao: `Cada @ produzida na fazenda custa R$ ${resultados.custoArrobaProduzida.toFixed(2)}, contra venda a R$ ${variaveis.precoProjetadoArroba.toFixed(2)}/@.`,
+          impacto: `Margem operacional de R$ ${margemPorArroba.toFixed(2)} para cada @ colocada nos animais.`,
+          acaoRecomendada: 'Excelente conversão alimentar. Avalie reter os animais por mais 15-20 dias caso o ganho continue acima de 1,2 kg/dia.'
+        });
+      } else if (margemPorArroba < 20) {
+        alertas.push({
+          id: 'alerta-arroba-cara',
+          tipo: 'atencao',
+          categoria: 'producao',
+          titulo: 'Custo da Arroba Produzida Próximo ao Preço de Venda',
+          descricao: `O custo para colocar cada @ na fazenda está em R$ ${resultados.custoArrobaProduzida.toFixed(2)}/@, muito próximo da venda (R$ ${variaveis.precoProjetadoArroba.toFixed(2)}/@).`,
+          impacto: 'A engorda gera pouca margem marginal. O lucro depende quase que exclusivamente da compra barata do boi magro.',
+          acaoRecomendada: 'Revise a formulação da ração (%PV e custo/kg de insumos) ou o ganho diário (GMD).'
+        });
+      }
+    }
+
+    // 8. Comparativo com a Renda Fixa / Selic
+    if (resultados.comparativoSelic) {
+      if (resultados.comparativoSelic.relacaoComSelic >= 2.0) {
+        alertas.push({
+          id: 'oportunidade-supera-selic',
+          tipo: 'oportunidade',
+          categoria: 'financeiro',
+          titulo: `Operação Rende ${resultados.comparativoSelic.relacaoComSelic}x a Taxa Selic`,
+          descricao: `Sua operação no boi projeta rentabilidade de ${resultados.comparativoSelic.rentabilidadeBoiPeriodo}% no ciclo, superando amplamente o CDI/Selic (${resultados.comparativoSelic.rentabilidadeSelicPeriodo}%).`,
+          impacto: `Ganho adicional de R$ ${resultados.comparativoSelic.diferencaLucroVsSelic.toLocaleString('pt-BR')} comparado ao investimento bancário seguro.`,
+          acaoRecomendada: 'Rentabilidade atrativa do capital próprio empregado na atividade pecuária.'
+        });
+      } else if (resultados.comparativoSelic.relacaoComSelic < 1.0 && resultados.lucro > 0) {
+        alertas.push({
+          id: 'alerta-abaixo-selic',
+          tipo: 'atencao',
+          categoria: 'financeiro',
+          titulo: 'Rentabilidade do Boi Inferior ao CDI/Selic',
+          descricao: `A operação projeta ganho de ${resultados.comparativoSelic.rentabilidadeBoiPeriodo}%, enquanto a aplicação financeira renderia ${resultados.comparativoSelic.rentabilidadeSelicPeriodo}% sem risco agropecuário.`,
+          impacto: `Custo de oportunidade do capital: o CDI renderia R$ ${Math.abs(resultados.comparativoSelic.diferencaLucroVsSelic).toLocaleString('pt-BR')} a mais.`,
+          acaoRecomendada: 'Otimize custos de compra do boi magro e insumos para elevar o retorno sobre o capital investido.'
+        });
+      }
+    }
+
     return alertas;
   }
 }

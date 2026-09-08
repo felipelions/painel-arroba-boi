@@ -121,6 +121,58 @@ export function ComparadorCenários({
               })}
             </tr>
 
+            {/* Lucro por Cabeça */}
+            <tr className="hover:bg-slate-800/30 transition-colors bg-emerald-950/10">
+              <td className="p-3.5 sm:p-4 font-semibold text-emerald-400">
+                Lucro Líquido por Cabeça
+              </td>
+              {cenarios.map(c => (
+                <td key={c.id} className="p-3.5 sm:p-4">
+                  <span className="font-bold text-emerald-400 text-sm">
+                    R$ {(c.resultados.lucroPorCabeca || (c.resultados.animaisAbatidos > 0 ? Math.round(c.resultados.lucro / c.resultados.animaisAbatidos) : 0)).toLocaleString('pt-BR')}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">/boi</span>
+                </td>
+              ))}
+            </tr>
+
+            {/* Custo da Arroba Produzida (@) */}
+            <tr className="hover:bg-slate-800/30 transition-colors">
+              <td className="p-3.5 sm:p-4 font-semibold text-slate-300">
+                Custo da @ Produzida (Engorda)
+              </td>
+              {cenarios.map(c => (
+                <td key={c.id} className="p-3.5 sm:p-4">
+                  <span className="font-bold text-amber-300">
+                    R$ {(c.resultados.custoArrobaProduzida || 0).toFixed(2)}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">/@ engordada</span>
+                </td>
+              ))}
+            </tr>
+
+            {/* Comparativo com a Selic */}
+            <tr className="hover:bg-slate-800/30 transition-colors">
+              <td className="p-3.5 sm:p-4 font-semibold text-slate-300">
+                Comparativo com a Selic
+              </td>
+              {cenarios.map(c => {
+                const rel = c.resultados.comparativoSelic?.relacaoComSelic || 0;
+                return (
+                  <td key={c.id} className="p-3.5 sm:p-4">
+                    <span className={`font-bold ${rel >= 1.5 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                      {rel > 0 ? `${rel}x a Selic` : '-'}
+                    </span>
+                    {c.resultados.comparativoSelic && (
+                      <span className="text-[10px] text-slate-400 block">
+                        +{c.resultados.comparativoSelic.rentabilidadeBoiPeriodo}% no ciclo
+                      </span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+
             {/* Score de Risco */}
             <tr className="hover:bg-slate-800/30 transition-colors">
               <td className="p-3.5 sm:p-4 font-semibold text-slate-300 flex items-center gap-2">

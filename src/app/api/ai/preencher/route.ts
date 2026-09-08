@@ -45,6 +45,7 @@ Retorne SEMPRE e EXCLUSIVAMENTE um objeto JSON válido contendo exatamente esta 
     "precoProjetadoArroba": 322,
     "precoBezerro": 2400,
     "precoBoiMagro": 3800,
+    "precoCompraArrobaBoiMagro": 380,
     "precoMilho": 65,
     "precoFareloSoja": 1800,
     "dolar": 5.60,
@@ -61,6 +62,8 @@ Retorne SEMPRE e EXCLUSIVAMENTE um objeto JSON válido contendo exatamente esta 
     "descontoArroba": 1.5,
     "freteVendaCabeca": 35,
     "comissaoVendaPercent": 1.0,
+    "impostoSenarPercent": 1.63,
+    "tipoMedidaArea": "hectares",
     "areaPastagem": 800,
     "tipoPastagem": "Brachiaria Brizantha",
     "capacidadeSuporteUA": 1.3,
@@ -70,6 +73,11 @@ Retorne SEMPRE e EXCLUSIVAMENTE um objeto JSON válido contendo exatamente esta 
     "investimentoReformaHa": 1200,
     "estrategiaNutricional": "confinamento_total",
     "custoAnimalDia": 9.50,
+    "consumoRacaoPercentPV": 1.80,
+    "precoKgRacao": 1.58,
+    "arrendamentoMensal": 0,
+    "maoDeObraMensal": 1500,
+    "custoSeguroCabeca": 5.0,
     "cenarioClimatico": "normal",
     "impactoPastoPercent": 0,
     "custosFixosMensais": 20000,
@@ -82,6 +90,9 @@ Retorne SEMPRE e EXCLUSIVAMENTE um objeto JSON válido contendo exatamente esta 
 }
 IMPORTANTE:
 - Converta valores numéricos para number (nunca strings).
+- Se o usuário mencionar consumo de ração em % do PV (peso vivo) ou preço/kg de ração, preencha 'consumoRacaoPercentPV' e 'precoKgRacao'.
+- Se o usuário citar preço de compra do boi magro por arroba (ex: 380/@), preencha 'precoCompraArrobaBoiMagro'.
+- Se citar arrendamento (aluguel de pasto) ou mão de obra mensal, preencha 'arrendamentoMensal' e 'maoDeObraMensal'.
 - Para valores ausentes no texto do usuário, aplique os melhores padrões agronômicos coerentes com a estratégia descrita (confinamento, pasto, recria, etc.).`;
 
     const openAiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -182,18 +193,39 @@ function generateIntelligentFallback(prompt: string) {
   }
 
   // 6. Estratégia nutricional e custo diário
+  // 6. Estratégia nutricional, %PV e custo diário
   let estrategia: 'pasto_mineral' | 'proteinado_aguas' | 'proteinado_seca' | 'semi_confinamento' | 'confinamento_total' = 'confinamento_total';
   let custoDia = 9.80;
+  let consumoRacaoPercentPV = 1.80;
+  let precoKgRacao = 1.58;
 
   if (p.includes('semi')) {
     estrategia = 'semi_confinamento';
     custoDia = 6.20;
+    consumoRacaoPercentPV = 1.20;
+    precoKgRacao = 1.45;
   } else if (p.includes('proteinado') || p.includes('suplement')) {
     estrategia = 'proteinado_seca';
     custoDia = 4.80;
+    consumoRacaoPercentPV = 0.50;
+    precoKgRacao = 2.20;
   } else if (p.includes('pasto') || p.includes('mineral')) {
     estrategia = 'pasto_mineral';
     custoDia = 2.40;
+    consumoRacaoPercentPV = 0.10;
+    precoKgRacao = 3.50;
+  }
+
+  // Extração de %PV (ex: 1.8% PV ou 1,8% do peso)
+  const matchPV = p.match(/(\d+(?:[.,]\d+)?)\s*%\s*(?:do\s*)?(?:pv|peso\s*vivo)/i);
+  if (matchPV && matchPV[1]) {
+    consumoRacaoPercentPV = parseFloat(matchPV[1].replace(',', '.'));
+  }
+
+  // Preço do kg de ração (ex: 1.58 por kg, 1,58/kg de racao)
+  const matchPrecoRacao = p.match(/(\d+(?:[.,]\d+)?)\s*(?:reais|r\$)?\s*(?:\/|por)\s*kg(?:\s*(?:de\s*)?ra[çc][aã]o)?/i);
+  if (matchPrecoRacao && matchPrecoRacao[1]) {
+    precoKgRacao = parseFloat(matchPrecoRacao[1].replace(',', '.'));
   }
 
   const matchCustoDia = p.match(/(\d+(?:[.,]\d+)?)\s*(?:reais|r\$)?\s*(?:\/|por)\s*(?:cab|dia|boi|animal)/i);
@@ -202,6 +234,28 @@ function generateIntelligentFallback(prompt: string) {
   }
 
   // 7. Clima
+  // 7. Preço de compra do boi magro por @ (ex: 380/@, 380 a arroba magra)
+  let precoCompraArrobaBoiMagro = 380;
+  const matchCompraMagro = p.match(/(\d{3})\s*(?:reais|r\$)?\s*(?:\/|por|\@)\s*(?:de\s*)?(?:boi\s*magro|magro|compra)/i)
+    || p.match(/compra(?:r)?\s*(?:a|por)?\s*(\d{3})\s*(?:\/|por|\@)/i);
+  if (matchCompraMagro && matchCompraMagro[1]) {
+    precoCompraArrobaBoiMagro = parseFloat(matchCompraMagro[1].replace(',', '.'));
+  }
+
+  // 8. Custos operacionais (Arrendamento, Mão de Obra)
+  let arrendamento = 0;
+  const matchArrendamento = p.match(/arrendamento\s*(?:de)?\s*(?:r\$)?\s*(\d+(?:[.,]\d+)?)/i);
+  if (matchArrendamento && matchArrendamento[1]) {
+    arrendamento = parseFloat(matchArrendamento[1].replace('.', '').replace(',', '.'));
+  }
+
+  let maoDeObra = 1500;
+  const matchMaoDeObra = p.match(/m[aã]o\s*de\s*obra\s*(?:de)?\s*(?:r\$)?\s*(\d+(?:[.,]\d+)?)/i);
+  if (matchMaoDeObra && matchMaoDeObra[1]) {
+    maoDeObra = parseFloat(matchMaoDeObra[1].replace('.', '').replace(',', '.'));
+  }
+
+  // 9. Clima
   let cenarioClima: 'normal' | 'seca_moderada' | 'seca_severa' | 'excesso_chuva' = 'normal';
   if (p.includes('seca severa') || p.includes('estiagem severa')) {
     cenarioClima = 'seca_severa';
@@ -230,6 +284,8 @@ function generateIntelligentFallback(prompt: string) {
       precoProjetadoArroba: precoArroba,
       precoBezerro: 2400,
       precoBoiMagro: Math.round(pesoAtual * 9.5),
+      precoBoiMagro: Math.round((pesoAtual / 30) * precoCompraArrobaBoiMagro),
+      precoCompraArrobaBoiMagro,
       precoMilho: 65,
       precoFareloSoja: 1800,
       dolar: 5.60,
@@ -246,6 +302,8 @@ function generateIntelligentFallback(prompt: string) {
       descontoArroba: 1.5,
       freteVendaCabeca: 35,
       comissaoVendaPercent: 1.0,
+      impostoSenarPercent: 1.63,
+      tipoMedidaArea: 'hectares',
       areaPastagem: 800,
       tipoPastagem: 'Brachiaria Brizantha',
       capacidadeSuporteUA: 1.3,
@@ -255,6 +313,11 @@ function generateIntelligentFallback(prompt: string) {
       investimentoReformaHa: 1200,
       estrategiaNutricional: estrategia,
       custoAnimalDia: custoDia,
+      consumoRacaoPercentPV,
+      precoKgRacao,
+      arrendamentoMensal: arrendamento,
+      maoDeObraMensal: maoDeObra,
+      custoSeguroCabeca: 5.0,
       cenarioClimatico: cenarioClima,
       impactoPastoPercent: cenarioClima === 'seca_severa' ? -0.25 : cenarioClima === 'seca_moderada' ? -0.15 : 0,
       custosFixosMensais: 20000,

@@ -42,6 +42,10 @@ import {
   ShieldAlert,
   Wallet,
   Scale
+  Scale,
+  Percent,
+  Clock,
+  ArrowRight
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -64,6 +68,11 @@ export function SimulacaoCenáriosView() {
   // Abas didáticas simplificadas
   const [activeTab, setActiveTab] = useState<'simulador' | 'resultado' | 'diagnostico' | 'comparador'>('simulador');
   
+  // Modos de entrada
+  const [modoCompraGado, setModoCompraGado] = useState<'arroba' | 'cabeca'>('arroba');
+  const [modoNutricao, setModoNutricao] = useState<'planilha' | 'direto'>('planilha');
+  const [unidadeArea, setUnidadeArea] = useState<'hectares' | 'alqueires'>('hectares');
+
   // Expansão de custos avançados
   const [showAdvancedCosts, setShowAdvancedCosts] = useState(false);
   
@@ -81,11 +90,22 @@ export function SimulacaoCenáriosView() {
     async function loadData() {
       setLoading(true);
       const list = await StorageService.listScenarios();
+      let list = await StorageService.listScenarios();
+      if (!list || list.length === 0) {
+        const cenarioPadrao = criarCenarioPadrao();
+        await StorageService.saveScenario(cenarioPadrao);
+        list = [cenarioPadrao];
+      }
       setCenarios(list);
       if (list.length > 0) {
         const activeId = StorageService.getActiveScenarioId();
         const found = list.find(c => c.id === activeId) || list[0];
         setCenarioAtual(found);
+      const activeId = StorageService.getActiveScenarioId();
+      const found = list.find(c => c.id === activeId) || list[0];
+      setCenarioAtual(found);
+      if (found.variaveis.tipoMedidaArea) {
+        setUnidadeArea(found.variaveis.tipoMedidaArea);
       }
       setLoading(false);
     }
@@ -99,11 +119,14 @@ export function SimulacaoCenáriosView() {
 
   // Recalcula simulação e salva com debounce
   function updateVariable<K extends keyof CenarioVariaveis>(key: K, value: CenarioVariaveis[K]) {
+  // Recalcula simulação e salva com debounce (suporta múltiplas variáveis simultâneas)
+  function updateVariables(partial: Partial<CenarioVariaveis>) {
     if (!cenarioAtual) return;
 
     const novasVariaveis: CenarioVariaveis = {
       ...cenarioAtual.variaveis,
       [key]: value
+      ...partial
     };
 
     const novosResultados = SimulationEngine.calculate(novasVariaveis, cenarioAtual.fazenda);
@@ -124,6 +147,10 @@ export function SimulacaoCenáriosView() {
     StorageService.debounceAutoSave(cenarioAtualizado, 500, (success) => {
       setSaveStatus(success ? 'salvo' : 'erro');
     });
+  }
+
+  function updateVariable<K extends keyof CenarioVariaveis>(key: K, value: CenarioVariaveis[K]) {
+    updateVariables({ [key]: value });
   }
 
   // Atalhos de incremento didático (+/-)
@@ -292,6 +319,20 @@ export function SimulacaoCenáriosView() {
   // Encontra cenário base para comparação didática
   const cenarioBase = cenarios.find(c => c.isBase) || cenarios[0];
   const diferencaLucroBase = r.lucro - cenarioBase.resultados.lucro;
+  const diferencaLucroBase = r.lucro - (cenarioBase?.resultados?.lucro || 0);
+
+  // Cálculos didáticos auxiliares da fazenda
+  const pesoEntradaEfetivo = v.pesoMedioEntrada > 0 ? v.pesoMedioEntrada : v.pesoMedioAtual;
+  const arrobasEntrada = Math.round((pesoEntradaEfetivo / 30) * 10) / 10;
+  const precoBoiMagroCalculado = v.precoCompraArrobaBoiMagro && v.precoCompraArrobaBoiMagro > 0
+    ? Math.round(arrobasEntrada * v.precoCompraArrobaBoiMagro)
+    : (v.precoBoiMagro || 3800);
+
+  const pesoFinalCalculado = v.pesoMedioSaida > 0 ? v.pesoMedioSaida : Math.round(pesoEntradaEfetivo + v.gmd * v.diasPermanencia);
+  const arrobasFinal = Math.round(((pesoFinalCalculado * v.rendimentoCarcaca) / 15) * 10) / 10;
+  const arrobasGanhas = Math.max(0, Math.round((arrobasFinal - arrobasEntrada) * 10) / 10);
+  const ganhoPorArrobaProduzida = Math.round((v.precoProjetadoArroba - (r.custoArrobaProduzida || 0)) * 100) / 100;
+  const consumoKgRacaoDia = Math.round((r.pesoVivoMedio * ((v.consumoRacaoPercentPV || 1.80) / 100)) * 100) / 100;
 
   return (
     <div className="space-y-4 sm:space-y-6 max-w-5xl mx-auto pb-12">
@@ -476,6 +517,8 @@ export function SimulacaoCenáriosView() {
 
       {/* 2. O TERMÔMETRO DO PRODUTOR (O que sobra no bolso, preço de empate e caixa) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* 2. OS 4 CARDS ESTRATÉGICOS DO PRODUTOR (DA PLANILHA) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         
         {/* Card 1: Lucro Líquido no Bolso */}
         <div className="sm:col-span-2 bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 border-2 border-emerald-500/40 rounded-3xl p-5 shadow-xl relative overflow-hidden">
@@ -487,15 +530,53 @@ export function SimulacaoCenáriosView() {
             <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full text-[11px] border border-emerald-500/30">
               Margem {r.margemLiquida}%
             </span>
+        {/* CARD 1: LUCRO LÍQUIDO NO BOLSO (TOTAL E POR BOI) */}
+        <div className="bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-900 border-2 border-emerald-500/40 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
+          <div>
+            <div className="flex items-center justify-between text-xs font-bold text-emerald-400 uppercase tracking-wider">
+              <span className="flex items-center gap-1.5">
+                <Wallet className="w-4 h-4" />
+                Lucro no Bolso
+              </span>
+              <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[10px] border border-emerald-500/30">
+                {r.margemLiquida}% margem
+              </span>
+            </div>
+
+            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
+              R$ {r.lucro.toLocaleString('pt-BR')}
+            </div>
+
+            {/* Destaque Didático: Sobra por Boi */}
+            <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold text-xs">
+              <span>Sobra limpa:</span>
+              <strong className="text-white text-sm">R$ {r.lucroPorCabeca.toLocaleString('pt-BR')}</strong>
+              <span className="text-[10px] font-normal text-slate-400">/boi</span>
+            </div>
           </div>
 
           <div className="text-3xl sm:text-5xl font-black text-white tracking-tight mt-1">
             R$ {r.lucro.toLocaleString('pt-BR')}
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+            <span>Venda Líquida:</span>
+            <strong className="text-slate-200">R$ {r.receitaLiquida.toLocaleString('pt-BR')}</strong>
           </div>
+        </div>
 
           <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
             <div>
               Receita Total da Venda: <strong className="text-slate-200">R$ {r.receitaLiquida.toLocaleString('pt-BR')}</strong>
+        {/* CARD 2: CUSTO DA @ PRODUZIDA (ENGORDA) VS VENDA */}
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
+          <div>
+            <div className="flex items-center justify-between text-xs font-bold text-amber-400 uppercase tracking-wider">
+              <span className="flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4" />
+                Custo da @ Engordada
+              </span>
+              <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px] border border-amber-500/30">
+                +{ganhoPorArrobaProduzida >= 0 ? 'R$ ' + ganhoPorArrobaProduzida.toFixed(2) : '-'} /@
+              </span>
             </div>
             {diferencaLucroBase !== 0 && !cenarioAtual.isBase && (
               <div className={`font-bold flex items-center gap-1 ${diferencaLucroBase > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -503,15 +584,64 @@ export function SimulacaoCenáriosView() {
                 {diferencaLucroBase > 0 ? '+' : ''}R$ {diferencaLucroBase.toLocaleString('pt-BR')} que o plano base
               </div>
             )}
+
+            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
+              R$ {r.custoArrobaProduzida.toFixed(2)}
+              <span className="text-xs font-normal text-slate-400 ml-1">/@</span>
+            </div>
+
+            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+              Custo para colocar cada @ na fazenda. Você vende a <strong className="text-white">R$ {v.precoProjetadoArroba.toFixed(2)}/@</strong>.
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+            <span>Dias p/ 1 @:</span>
+            <strong className="text-slate-200">{r.diasParaProduzirUmaArroba} dias</strong>
           </div>
         </div>
 
         {/* Card 2: Preço de Empate (Breakeven Didático) */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-3">
+        {/* CARD 3: COMPARATIVO COM A SELIC / CDI (DA PLANILHA) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
           <div>
             <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
+            <div className="flex items-center justify-between text-xs font-bold text-blue-400 uppercase tracking-wider">
               <span className="flex items-center gap-1.5">
                 <Scale className="w-4 h-4 text-amber-400" />
+                <Percent className="w-4 h-4" />
+                Boi vs CDI / Selic
+              </span>
+              <span className="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full text-[10px] border border-blue-500/30">
+                {r.comparativoSelic?.relacaoComSelic || 0}x a Selic
+              </span>
+            </div>
+
+            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
+              +{r.comparativoSelic?.rentabilidadeBoiPeriodo || 0}%
+              <span className="text-xs font-normal text-slate-400 ml-1.5">no ciclo</span>
+            </div>
+
+            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+              A Selic renderia {r.comparativoSelic?.rentabilidadeSelicPeriodo || 0}% no mesmo prazo ({v.diasPermanencia}d).
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+            <span className="text-slate-400">Ganho extra vs banco:</span>
+            <strong className="text-emerald-400 font-bold">
+              +R$ {(r.comparativoSelic?.diferencaLucroVsSelic || 0).toLocaleString('pt-BR')}
+            </strong>
+          </div>
+        </div>
+
+        {/* CARD 4: PREÇO DE EMPATE & LOTAÇÃO */}
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
+          <div>
+            <div className="flex items-center justify-between text-xs font-bold text-purple-400 uppercase tracking-wider">
+              <span className="flex items-center gap-1.5">
+                <Scale className="w-4 h-4" />
                 Preço de Empate
               </span>
               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
@@ -522,12 +652,14 @@ export function SimulacaoCenáriosView() {
             </div>
 
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
+            <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
               R$ {r.precoEquilibrio.toFixed(2)}
               <span className="text-xs font-normal text-slate-400 ml-1">/@</span>
             </div>
 
             <p className="text-[11px] text-slate-400 mt-1 leading-snug">
               Preço mínimo de venda para não ter prejuízo. Vendendo a R$ {v.precoProjetadoArroba.toFixed(2)}, você está protegido.
+              Preço mínimo geral no frigorífico para não tomar prejuízo na operação.
             </p>
           </div>
 
@@ -539,6 +671,9 @@ export function SimulacaoCenáriosView() {
             }`}>
               {r.scoreRisco}/100 ({r.classificacaoRisco})
             </span>
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+            <span>Lotação Pasto:</span>
+            <strong className="text-slate-200">{r.lotacaoUAPorHa} UA/ha</strong>
           </div>
         </div>
 
@@ -610,13 +745,18 @@ export function SimulacaoCenáriosView() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             
             {/* CONTROLE 1: PREÇO DA ARROBA */}
+            {/* CONTROLE 1: PREÇO DE VENDA DA ARROBA NO FRIGORÍFICO */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
                     Preço de Venda da Arroba (@)
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    Venda da Arroba no Frigorífico
                   </h4>
                   <p className="text-[11px] text-slate-400">Quanto você espera receber no frigorífico</p>
+                  <p className="text-[11px] text-slate-400">Preço esperado na data de abate</p>
                 </div>
                 <div className="text-lg font-black text-emerald-400">
                   R$ {v.precoProjetadoArroba.toFixed(2)}
@@ -628,6 +768,7 @@ export function SimulacaoCenáriosView() {
                 <button
                   type="button"
                   onClick={() => adjustNumber('precoProjetadoArroba', -5, 200, 500)}
+                  onClick={() => adjustNumber('precoProjetadoArroba', -5, 180, 500)}
                   className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   - R$ 5
@@ -635,6 +776,7 @@ export function SimulacaoCenáriosView() {
                 <button
                   type="button"
                   onClick={() => adjustNumber('precoProjetadoArroba', -1, 200, 500)}
+                  onClick={() => adjustNumber('precoProjetadoArroba', -1, 180, 500)}
                   className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   - R$ 1
@@ -642,6 +784,7 @@ export function SimulacaoCenáriosView() {
                 <input
                   type="range"
                   min="240"
+                  min="220"
                   max="420"
                   step="1"
                   value={v.precoProjetadoArroba}
@@ -651,6 +794,7 @@ export function SimulacaoCenáriosView() {
                 <button
                   type="button"
                   onClick={() => adjustNumber('precoProjetadoArroba', 1, 200, 500)}
+                  onClick={() => adjustNumber('precoProjetadoArroba', 1, 180, 500)}
                   className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   + R$ 1
@@ -658,14 +802,124 @@ export function SimulacaoCenáriosView() {
                 <button
                   type="button"
                   onClick={() => adjustNumber('precoProjetadoArroba', 5, 200, 500)}
+                  onClick={() => adjustNumber('precoProjetadoArroba', 5, 180, 500)}
                   className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   + R$ 5
                 </button>
               </div>
+
+              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+                <span>Receita Bruta Projetada:</span>
+                <strong className="text-white">R$ {r.receitaBruta.toLocaleString('pt-BR')}</strong>
+              </div>
             </div>
 
             {/* CONTROLE 2: QUANTIDADE DE BOIS */}
+            {/* CONTROLE 2: COMPRA DO BOI MAGRO (POR @ OU POR CABEÇA) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-amber-400" />
+                    Compra do Boi Magro
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Preço de aquisição para engorda</p>
+                </div>
+                <div className="text-lg font-black text-amber-300">
+                  {modoCompraGado === 'arroba'
+                    ? `R$ ${(v.precoCompraArrobaBoiMagro || 380).toFixed(2)}/@`
+                    : `R$ ${precoBoiMagroCalculado.toLocaleString('pt-BR')}/cab`}
+                </div>
+              </div>
+
+              {/* Seletor de Modo de Compra */}
+              <div className="flex items-center gap-2 pb-1">
+                <button
+                  type="button"
+                  onClick={() => setModoCompraGado('arroba')}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                    modoCompraGado === 'arroba'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  Preço por @ (R$ {(v.precoCompraArrobaBoiMagro || 380).toFixed(0)}/@)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModoCompraGado('cabeca')}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                    modoCompraGado === 'cabeca'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  Preço por Boi (R$ {precoBoiMagroCalculado.toLocaleString('pt-BR')})
+                </button>
+              </div>
+
+              {modoCompraGado === 'arroba' ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => adjustNumber('precoCompraArrobaBoiMagro', -10, 200, 600)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  >
+                    -10
+                  </button>
+                  <input
+                    type="range"
+                    min="250"
+                    max="460"
+                    step="5"
+                    value={v.precoCompraArrobaBoiMagro || 380}
+                    onChange={(e) => updateVariable('precoCompraArrobaBoiMagro', parseFloat(e.target.value))}
+                    className="flex-1 accent-amber-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adjustNumber('precoCompraArrobaBoiMagro', 10, 200, 600)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  >
+                    +10
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => adjustNumber('precoBoiMagro', -100, 1500, 8000)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  >
+                    -100
+                  </button>
+                  <input
+                    type="range"
+                    min="2500"
+                    max="6000"
+                    step="50"
+                    value={v.precoBoiMagro || 3800}
+                    onChange={(e) => updateVariable('precoBoiMagro', parseFloat(e.target.value))}
+                    className="flex-1 accent-amber-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adjustNumber('precoBoiMagro', 100, 1500, 8000)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  >
+                    +100
+                  </button>
+                </div>
+              )}
+
+              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+                <span>Custo de compra por boi:</span>
+                <strong className="text-white">R$ {precoBoiMagroCalculado.toLocaleString('pt-BR')} ({arrobasEntrada} @)</strong>
+              </div>
+            </div>
+
+            {/* CONTROLE 3: QUANTIDADE DE ANIMAIS NO LOTE */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
@@ -673,6 +927,7 @@ export function SimulacaoCenáriosView() {
                     Quantidade de Bois no Lote
                   </h4>
                   <p className="text-[11px] text-slate-400">Cabeças que serão engordadas</p>
+                  <p className="text-[11px] text-slate-400">Total de animais a engordar</p>
                 </div>
                 <div className="text-lg font-black text-white">
                   {v.quantidadeAnimais} <span className="text-xs font-normal text-slate-400">cab</span>
@@ -732,6 +987,9 @@ export function SimulacaoCenáriosView() {
                 <div className="text-lg font-black text-amber-400">
                   {v.gmd.toFixed(2)} <span className="text-xs font-normal text-slate-400">kg/dia</span>
                 </div>
+              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+                <span>Animais abatidos previstos (mortalidade {((v.mortalidade || 0.01) * 100).toFixed(1)}%):</span>
+                <strong className="text-white">{r.animaisAbatidos} cab</strong>
               </div>
 
               {/* Botões Rápidos por Sistema Produtivo */}
@@ -787,10 +1045,13 @@ export function SimulacaoCenáriosView() {
             </div>
 
             {/* CONTROLE 4: DIAS DE TRATO (PERMANÊNCIA) */}
+            {/* CONTROLE 4: DIAS DE TRATO / PERMANÊNCIA */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-emerald-400" />
                     Dias de Permanência / Trato
                   </h4>
                   <p className="text-[11px] text-slate-400">Duração do ciclo até a venda</p>
@@ -803,13 +1064,20 @@ export function SimulacaoCenáriosView() {
               {/* Botões Rápidos */}
               <div className="flex items-center gap-1.5 pb-1">
                 {[60, 90, 120, 180].map((dias) => (
+                {[60, 90, 100, 120, 150].map((dias) => (
                   <button
                     key={dias}
                     type="button"
                     onClick={() => updateVariable('diasPermanencia', dias)}
                     className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.diasPermanencia === dias ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                      v.diasPermanencia === dias
+                        ? 'bg-emerald-600 text-white border-emerald-500'
+                        : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
+                    }`}
                   >
                     {dias} dias
+                    {dias}d
                   </button>
                 ))}
               </div>
@@ -839,29 +1107,66 @@ export function SimulacaoCenáriosView() {
                   +10
                 </button>
               </div>
+
+              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+                <span>Duração estimada do lote:</span>
+                <strong className="text-white">{(v.diasPermanencia / 30).toFixed(1)} meses</strong>
+              </div>
             </div>
 
             {/* CONTROLE 5: PESO DE ENTRADA & SAÍDA */}
+            {/* CONTROLE 5: GANHO DE PESO (GMD) E PESOS DE ENTRADA/SAÍDA */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
                     Peso Vivo de Entrada
+                    Ganho Médio Diário (GMD)
                   </h4>
                   <p className="text-[11px] text-slate-400">Peso médio que o animal entra no lote</p>
+                  <p className="text-[11px] text-slate-400">Engorda diária por animal</p>
                 </div>
                 <div className="text-lg font-black text-white">
                   {v.pesoMedioAtual} <span className="text-xs font-normal text-slate-400">kg</span>
+                <div className="text-lg font-black text-amber-400">
+                  {v.gmd.toFixed(2)} <span className="text-xs font-normal text-slate-400">kg/dia</span>
                 </div>
+              </div>
+
+              {/* Botões Rápidos por Sistema Produtivo */}
+              <div className="flex items-center gap-1.5 pb-1">
+                <button
+                  type="button"
+                  onClick={() => updateVariable('gmd', 0.65)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 0.65 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                >
+                  Pasto (0.65)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateVariable('gmd', 1.05)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 1.05 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                >
+                  Semi (1.05)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateVariable('gmd', 1.45)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 1.45 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
+                >
+                  Confinamento (1.45)
+                </button>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => adjustNumber('pesoMedioAtual', -10, 180, 550)}
+                  onClick={() => adjustNumber('gmd', -0.05, 0.3, 2.2)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   -10kg
+                  -0.05
                 </button>
                 <input
                   type="range"
@@ -870,44 +1175,69 @@ export function SimulacaoCenáriosView() {
                   step="5"
                   value={v.pesoMedioAtual}
                   onChange={(e) => updateVariable('pesoMedioAtual', parseInt(e.target.value, 10))}
+                  min="0.4"
+                  max="1.8"
+                  step="0.05"
+                  value={v.gmd}
+                  onChange={(e) => updateVariable('gmd', parseFloat(e.target.value))}
                   className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
                 />
                 <button
                   type="button"
                   onClick={() => adjustNumber('pesoMedioAtual', 10, 180, 550)}
+                  onClick={() => adjustNumber('gmd', 0.05, 0.3, 2.2)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   +10kg
+                  +0.05
                 </button>
               </div>
 
               <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
                 <span>Peso final projetado: <strong className="text-emerald-400">{Math.round(v.pesoMedioAtual + v.gmd * v.diasPermanencia)} kg</strong></span>
                 <span>Rendimento carcaça: <strong className="text-white">{(v.rendimentoCarcaca * 100).toFixed(0)}%</strong></span>
+                <span>Entrada: <strong className="text-white">{pesoEntradaEfetivo} kg</strong></span>
+                <span>Saída: <strong className="text-emerald-400">{pesoFinalCalculado} kg ({arrobasFinal} @)</strong></span>
+                <span>Ganho: <strong className="text-amber-300">+{arrobasGanhas} @</strong></span>
               </div>
             </div>
 
             {/* CONTROLE 6: CUSTO DA COMIDA POR DIA */}
+            {/* CONTROLE 6: NUTRIÇÃO & RAÇÃO (DA PLANILHA) */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
                     Custo de Comida por Boi / Dia
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-emerald-400" />
+                    Alimentação & Ração (Planilha)
                   </h4>
                   <p className="text-[11px] text-slate-400">Gasto diário com ração, sal e trato</p>
+                  <p className="text-[11px] text-slate-400">Consumo em %PV e preço do kg</p>
                 </div>
                 <div className="text-lg font-black text-amber-400">
                   R$ {v.custoAnimalDia.toFixed(2)}
+                  <span className="text-xs font-normal text-slate-400 ml-1">/dia</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
+              {/* Seletor de Modo de Alimentação */}
+              <div className="flex items-center gap-2 pb-1">
                 <button
                   type="button"
                   onClick={() => adjustNumber('custoAnimalDia', -0.5, 1, 30)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  onClick={() => setModoNutricao('planilha')}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                    modoNutricao === 'planilha'
+                      ? 'bg-emerald-600 text-white border-emerald-500'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
                 >
                   - R$ 0.50
+                  Fórmula %PV e R$/kg
                 </button>
                 <input
                   type="range"
@@ -922,19 +1252,111 @@ export function SimulacaoCenáriosView() {
                   type="button"
                   onClick={() => adjustNumber('custoAnimalDia', 0.5, 1, 30)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  onClick={() => setModoNutricao('direto')}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                    modoNutricao === 'direto'
+                      ? 'bg-emerald-600 text-white border-emerald-500'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
                 >
                   + R$ 0.50
+                  Custo Diário Direto
                 </button>
               </div>
 
               <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
                 <span>Custo alimentar no período: <strong className="text-white">R$ {r.custoAlimentacao.toLocaleString('pt-BR')}</strong></span>
               </div>
+              {modoNutricao === 'planilha' ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Consumo (% do Peso Vivo):</span>
+                      <div className="flex items-center gap-1 mt-1">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          max="4.0"
+                          value={v.consumoRacaoPercentPV || 1.80}
+                          onChange={(e) => {
+                            const pv = parseFloat(e.target.value) || 0;
+                            const pr = v.precoKgRacao || 1.58;
+                            const custoDiaCalc = Math.round(((r.pesoVivoMedio * (pv / 100)) * pr) * 100) / 100;
+                            updateVariables({ consumoRacaoPercentPV: pv, custoAnimalDia: custoDiaCalc });
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold text-xs"
+                        />
+                        <span className="text-xs text-slate-400">%PV</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
+                      <span className="text-[10px] text-slate-400 block">Preço R$/kg da Ração:</span>
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-xs text-slate-400">R$</span>
+                        <input
+                          type="number"
+                          step="0.05"
+                          min="0.5"
+                          max="10"
+                          value={v.precoKgRacao || 1.58}
+                          onChange={(e) => {
+                            const pr = parseFloat(e.target.value) || 0;
+                            const pv = v.consumoRacaoPercentPV || 1.80;
+                            const custoDiaCalc = Math.round(((r.pesoVivoMedio * (pv / 100)) * pr) * 100) / 100;
+                            updateVariables({ precoKgRacao: pr, custoAnimalDia: custoDiaCalc });
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+                    <span>Trato: <strong className="text-emerald-400">{consumoKgRacaoDia} kg de ração/dia</strong></span>
+                    <span>Total Trato: <strong className="text-white">R$ {r.custoAlimentacao.toLocaleString('pt-BR')}</strong></span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => adjustNumber('custoAnimalDia', -0.5, 1, 35)}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                    >
+                      -0.50
+                    </button>
+                    <input
+                      type="range"
+                      min="2"
+                      max="20"
+                      step="0.5"
+                      value={v.custoAnimalDia}
+                      onChange={(e) => updateVariable('custoAnimalDia', parseFloat(e.target.value))}
+                      className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => adjustNumber('custoAnimalDia', 0.5, 1, 35)}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                    >
+                      +0.50
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+                    <span>Alimentação Total no Período:</span>
+                    <strong className="text-white">R$ {r.custoAlimentacao.toLocaleString('pt-BR')}</strong>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>
 
           {/* ACORDEÃO DE CUSTOS DETALHADOS (Simples e Expansível) */}
+          {/* ACORDEÃO DE CUSTOS OPERACIONAIS E ESTRUTURA (PLANILHA) */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
             <button
               type="button"
@@ -943,12 +1365,16 @@ export function SimulacaoCenáriosView() {
             >
               <div className="flex items-center gap-2.5">
                 <Zap className="w-4 h-4 text-emerald-400" />
+                <Sliders className="w-4 h-4 text-emerald-400" />
                 <div>
                   <h4 className="text-xs font-bold text-white">Outros Custos da Fazenda</h4>
                   <p className="text-[11px] text-slate-400">Custos fixos, remédios, frete e pastagem</p>
+                  <h4 className="text-xs font-bold text-white">Custos da Fazenda (Arrendamento, Mão de Obra, Pasto e Senar)</h4>
+                  <p className="text-[11px] text-slate-400">Valores fixos, impostos de abate e área de pastagem</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 text-xs text-slate-400">
+              <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold">
                 <span>{showAdvancedCosts ? 'Ocultar' : 'Ajustar'}</span>
                 {showAdvancedCosts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </div>
@@ -956,23 +1382,130 @@ export function SimulacaoCenáriosView() {
 
             {showAdvancedCosts && (
               <div className="p-4 border-t border-slate-800 space-y-4 text-xs animate-fadeIn bg-slate-950/40">
+              <div className="p-4 border-t border-slate-800 space-y-4 text-xs animate-fadeIn bg-slate-950/50">
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   
                   {/* Custos Fixos */}
+                  {/* Arrendamento Mensal */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
                     <span className="font-semibold text-slate-300">Custos Fixos Mensais (R$)</span>
+                    <span className="font-semibold text-slate-300">Arrendamento / Aluguel de Pasto (R$/mês)</span>
                     <input
                       type="number"
                       step="1000"
                       value={v.custosFixosMensais}
                       onChange={(e) => updateVariable('custosFixosMensais', parseFloat(e.target.value) || 0)}
+                      step="500"
+                      value={v.arrendamentoMensal || 0}
+                      onChange={(e) => updateVariable('arrendamentoMensal', parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
                     <p className="text-[10px] text-slate-500">Funcionários, energia, manutenção</p>
+                    <p className="text-[10px] text-slate-500">Ex: R$ 3.500/mês ou R$ 0 se terra própria</p>
                   </div>
 
                   {/* Sanitário */}
+                  {/* Mão de Obra Mensal */}
+                  <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <span className="font-semibold text-slate-300">Mão de Obra / Campeiro (R$/mês)</span>
+                    <input
+                      type="number"
+                      step="500"
+                      value={v.maoDeObraMensal || 0}
+                      onChange={(e) => updateVariable('maoDeObraMensal', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
+                    />
+                    <p className="text-[10px] text-slate-500">Salários e encargos operacionais</p>
+                  </div>
+
+                  {/* Seguro por Cabeça */}
+                  <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <span className="font-semibold text-slate-300">Seguro por Boi (R$/cab)</span>
+                    <input
+                      type="number"
+                      step="1"
+                      value={v.custoSeguroCabeca || 0}
+                      onChange={(e) => updateVariable('custoSeguroCabeca', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
+                    />
+                    <p className="text-[10px] text-slate-500">Ex: R$ 5,00 por cabeça no ciclo</p>
+                  </div>
+
+                  {/* Imposto Senar / Funrural */}
+                  <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <span className="font-semibold text-slate-300">Imposto Senar / Funrural (%)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={v.impostoSenarPercent ?? 1.63}
+                      onChange={(e) => updateVariable('impostoSenarPercent', parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
+                    />
+                    <p className="text-[10px] text-slate-500">Padrão nacional: 1.63% sobre a receita bruta</p>
+                  </div>
+
+                  {/* Área de Pastagem (Hectares vs Alqueires) */}
+                  <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-300">Área de Pastagem</span>
+                      <div className="flex items-center gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUnidadeArea('hectares');
+                            updateVariable('tipoMedidaArea', 'hectares');
+                          }}
+                          className={`px-1.5 py-0.5 rounded ${unidadeArea === 'hectares' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}
+                        >
+                          ha
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUnidadeArea('alqueires');
+                            updateVariable('tipoMedidaArea', 'alqueires');
+                          }}
+                          className={`px-1.5 py-0.5 rounded ${unidadeArea === 'alqueires' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}
+                        >
+                          alq
+                        </button>
+                      </div>
+                    </div>
+
+                    {unidadeArea === 'alqueires' ? (
+                      <div>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={Math.round((v.areaPastagem / 2.42) * 10) / 10}
+                          onChange={(e) => {
+                            const alq = parseFloat(e.target.value) || 1;
+                            updateVariable('areaPastagem', Math.round(alq * 2.42 * 10) / 10);
+                          }}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          = {v.areaPastagem} ha (Lotação: {r.lotacaoUAPorHa} UA/ha)
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="number"
+                          step="5"
+                          value={v.areaPastagem}
+                          onChange={(e) => updateVariable('areaPastagem', parseFloat(e.target.value) || 1)}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Lotação calculada: {r.lotacaoUAPorHa} UA/ha
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sanitário & Vacinas */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
                     <span className="font-semibold text-slate-300">Vacinas e Remédios (R$/cab/ano)</span>
                     <input
@@ -983,6 +1516,7 @@ export function SimulacaoCenáriosView() {
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
                     <p className="text-[10px] text-slate-500">Vermífugo, aftosa, mineral sanitário</p>
+                    <p className="text-[10px] text-slate-500">Vermífugo, aftosa e sanidade preventiva</p>
                   </div>
 
                   {/* Clima */}
@@ -1013,6 +1547,80 @@ export function SimulacaoCenáriosView() {
       {activeTab === 'resultado' && (
         <div className="space-y-4 animate-fadeIn">
           
+          {/* FECHAMENTO DA CONTA DO BOI (DRE DIDÁTICA DO PRODUTOR) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-emerald-400" />
+              Fechamento Completo da Conta do Boi (DRE)
+            </h4>
+            <p className="text-xs text-slate-400">
+              Extrato detalhado de compra, custos operacionais e resultado líquido no bolso
+            </p>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-800">
+              <table className="w-full text-left text-xs whitespace-nowrap">
+                <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="p-3 font-semibold">Item de Custo / Receita</th>
+                    <th className="p-3 font-semibold text-right">Total do Lote</th>
+                    <th className="p-3 font-semibold text-right">Por Cabeça</th>
+                    <th className="p-3 font-semibold text-right">% do Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  <tr>
+                    <td className="p-3 text-slate-300 font-medium">1. Compra dos Animais (Gado Magro)</td>
+                    <td className="p-3 text-right font-bold text-white">R$ {r.custoCompraAnimais.toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-300">R$ {Math.round(r.custoCompraAnimais / Math.max(1, v.quantidadeAnimais)).toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round((r.custoCompraAnimais / r.custoTotal) * 100) : 0}%</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 text-slate-300 font-medium">2. Alimentação & Ração ({v.diasPermanencia} dias)</td>
+                    <td className="p-3 text-right font-bold text-amber-300">R$ {r.custoAlimentacao.toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-300">R$ {Math.round(r.custoAlimentacao / Math.max(1, v.quantidadeAnimais)).toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round((r.custoAlimentacao / r.custoTotal) * 100) : 0}%</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 text-slate-300 font-medium">3. Arrendamento & Mão de Obra</td>
+                    <td className="p-3 text-right font-bold text-slate-200">R$ {(r.custoArrendamento + r.custoMaoDeObra).toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-300">R$ {Math.round((r.custoArrendamento + r.custoMaoDeObra) / Math.max(1, v.quantidadeAnimais)).toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round(((r.custoArrendamento + r.custoMaoDeObra) / r.custoTotal) * 100) : 0}%</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 text-slate-300 font-medium">4. Sanidade, Seguro & Pastagem</td>
+                    <td className="p-3 text-right font-bold text-slate-200">R$ {(r.custoSanitario + r.custoSeguro + r.custoPastagem).toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-300">R$ {Math.round((r.custoSanitario + r.custoSeguro + r.custoPastagem) / Math.max(1, v.quantidadeAnimais)).toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round(((r.custoSanitario + r.custoSeguro + r.custoPastagem) / r.custoTotal) * 100) : 0}%</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3 text-slate-300 font-medium">5. Imposto Senar (1.63%) & Fretes de Venda</td>
+                    <td className="p-3 text-right font-bold text-slate-200">R$ {(r.custoImpostosVenda + (r.animaisAbatidos * (v.freteVendaCabeca || 0))).toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-300">R$ {Math.round((r.custoImpostosVenda + (r.animaisAbatidos * (v.freteVendaCabeca || 0))) / Math.max(1, r.animaisAbatidos)).toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round(((r.custoImpostosVenda + (r.animaisAbatidos * (v.freteVendaCabeca || 0))) / r.custoTotal) * 100) : 0}%</td>
+                  </tr>
+                  <tr className="bg-slate-950 font-bold border-t border-slate-700">
+                    <td className="p-3 text-red-300">CUSTO TOTAL DESEMBOLSADO</td>
+                    <td className="p-3 text-right text-red-400 text-sm">R$ {r.custoTotal.toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-red-400">R$ {r.custoPorCabeca.toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-400">100%</td>
+                  </tr>
+                  <tr className="bg-slate-950/80 font-bold">
+                    <td className="p-3 text-slate-200">RECEITA LÍQUIDA DA VENDA</td>
+                    <td className="p-3 text-right text-emerald-400 text-sm">R$ {r.receitaLiquida.toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-emerald-400">R$ {r.vendaPorCabeca.toLocaleString('pt-BR')}</td>
+                    <td className="p-3 text-right text-slate-400">-</td>
+                  </tr>
+                  <tr className="bg-emerald-950/40 font-black border-t-2 border-emerald-500/50">
+                    <td className="p-3.5 text-emerald-300 text-sm uppercase">SOBRA LÍQUIDA NO BOLSO</td>
+                    <td className="p-3.5 text-right text-emerald-400 text-base sm:text-lg">R$ {r.lucro.toLocaleString('pt-BR')}</td>
+                    <td className="p-3.5 text-right text-emerald-400 text-base">R$ {r.lucroPorCabeca.toLocaleString('pt-BR')} /boi</td>
+                    <td className="p-3.5 text-right text-emerald-300">{r.margemLiquida}% margem</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
@@ -1156,4 +1764,93 @@ export function SimulacaoCenáriosView() {
 
     </div>
   );
+}
+
+/**
+ * Função utilitária para criar cenário base inicial completo caso a base de dados esteja vazia
+ */
+function criarCenarioPadrao(): CenarioCompleto {
+  const fazenda: FazendaConfig = {
+    id: 'fazenda_001',
+    nome: 'Fazenda Boa Esperança',
+    estado: 'SP',
+    municipio: 'Sorocaba',
+    areaTotal: 1200,
+    areaProdutiva: 950,
+    areaPastagem: 800,
+    areaAgricola: 100,
+    areaConfinamento: 50,
+    modeloProducao: 'engorda',
+    objetivoPrincipal: 'maximizar_lucro',
+    moeda: 'BRL'
+  };
+
+  const variaveis: CenarioVariaveis = {
+    precoArroba: 310,
+    precoProjetadoArroba: 322,
+    precoBezerro: 2400,
+    precoBoiMagro: 4180,
+    precoCompraArrobaBoiMagro: 380,
+    precoMilho: 65,
+    precoFareloSoja: 1800,
+    dolar: 5.60,
+    taxaJuros: 0.1125,
+    quantidadeAnimais: 500,
+    pesoMedioAtual: 360,
+    pesoMedioEntrada: 330,
+    pesoMedioSaida: 480,
+    gmd: 1.50,
+    rendimentoCarcaca: 0.56,
+    mortalidade: 0.01,
+    diasPermanencia: 100,
+    lotes: [],
+    novasCompras: [],
+    dataVenda: '2026-12-30',
+    bonificacaoArroba: 3.5,
+    descontoArroba: 1.5,
+    impostoSenarPercent: 1.63,
+    freteVendaCabeca: 35,
+    comissaoVendaPercent: 1.0,
+    tipoMedidaArea: 'hectares',
+    areaPastagem: 800,
+    tipoPastagem: 'Brachiaria Brizantha',
+    capacidadeSuporteUA: 1.5,
+    lotacaoAtualUA: 1.1,
+    custoManutencaoPastagemHaAno: 180,
+    reformaPastagemAreaHa: 0,
+    investimentoReformaHa: 1200,
+    estrategiaNutricional: 'confinamento_total',
+    custoAnimalDia: 11.52,
+    consumoRacaoPercentPV: 1.80,
+    precoKgRacao: 1.58,
+    arrendamentoMensal: 3500,
+    maoDeObraMensal: 1500,
+    custoSeguroCabeca: 5.0,
+    cenarioClimatico: 'normal',
+    impactoPastoPercent: 0,
+    custosFixosMensais: 20000,
+    custosSanitariosCabecaAno: 65,
+    outrosCustosCabecaMes: 12,
+    capitalDisponivel: 600000,
+    financiamentoNecessario: 0,
+    taxaFinanciamentoAno: 0.115
+  };
+
+  const resultados = SimulationEngine.calculate(variaveis, fazenda);
+  const alertas = InsightEngine.generateInsights(variaveis, resultados, fazenda);
+
+  return {
+    id: 'cenario_base_001',
+    nome: 'Cenário Base - Planejamento Safra',
+    descricao: 'Planejamento padrão de engorda e terminação em confinamento com suplementação.',
+    isBase: true,
+    dataCriacao: new Date().toISOString(),
+    dataAtualizacao: new Date().toISOString(),
+    fazenda,
+    periodo: { inicio: '2026-09', fim: '2027-09' },
+    variaveis,
+    resultados,
+    alertas,
+    schemaVersion: '1.0.0'
+  };
 }
