@@ -119,7 +119,7 @@ export default function HomePage() {
             {/* Total de Registros (quando no mercado) */}
             <div className="hidden lg:flex items-center gap-2 text-xs text-slate-500 font-medium">
               <Database className="w-4 h-4 text-emerald-500" />
-              <span>{snapshot?.totalRegistros.toLocaleString('pt-BR') || 0} registros</span>
+              <span>{(snapshot?.totalRegistros ?? 0).toLocaleString('pt-BR')} registros</span>
             </div>
           </div>
         </div>

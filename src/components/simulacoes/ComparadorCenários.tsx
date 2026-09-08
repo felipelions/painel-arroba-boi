@@ -86,7 +86,7 @@ export function ComparadorCenários({
                 return (
                   <td key={c.id} className="p-3.5 sm:p-4">
                     <div className="font-bold text-sm text-white">
-                      R$ {c.resultados.lucro.toLocaleString('pt-BR')}
+                      R$ {(c.resultados?.lucro ?? 0).toLocaleString('pt-BR')}
                     </div>
                     {isBest && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 mt-0.5">
@@ -208,7 +208,7 @@ export function ComparadorCenários({
                 return (
                   <td key={c.id} className="p-3.5 sm:p-4">
                     <span className="font-semibold text-slate-300">
-                      R$ {c.resultados.capitalNecessario.toLocaleString('pt-BR')}
+                      R$ {(c.resultados?.capitalNecessario ?? 0).toLocaleString('pt-BR')}
                     </span>
                     {isBest && (
                       <span className="block text-[10px] font-semibold text-purple-400 mt-0.5">
@@ -239,7 +239,7 @@ export function ComparadorCenários({
               </td>
               {cenarios.map(c => (
                 <td key={c.id} className="p-3.5 sm:p-4 text-slate-300 font-medium">
-                  {c.resultados.producaoArrobas.toLocaleString('pt-BR')} @
+                  {(c.resultados?.producaoArrobas ?? 0).toLocaleString('pt-BR')} @
                 </td>
               ))}
             </tr>

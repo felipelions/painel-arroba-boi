@@ -89,7 +89,7 @@ export function Filters({
         {typeof totalFiltered === 'number' && (
           <div className="text-[11px] text-slate-400 flex items-center justify-between px-1">
             <span>
-              Exibindo <strong>{totalFiltered.toLocaleString('pt-BR')}</strong> registros
+              Exibindo <strong>{(totalFiltered ?? 0).toLocaleString('pt-BR')}</strong> registros
             </span>
             {hasActiveFilters && (
               <span className="text-emerald-400 font-medium">Filtros ativos</span>
