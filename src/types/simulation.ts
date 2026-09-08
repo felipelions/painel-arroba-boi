@@ -133,6 +133,14 @@ export interface ComparativoSelic {
 }
 
 export interface CenarioResultados {
+  // Rebanho & Compras
+  quantidadeComprada: number;
+  mortalidadeCabecas: number;
+  rebanhoVivoAtual: number;
+  custoCompraPorCabeca: number;
+  custoCompraPorArroba: number;
+  arrobasEntradaTotal: number;
+
   producaoArrobas: number;
   totalArrobasProduzidas: number; // arrobas ganhas na fazenda
   totalArrobasAbatidas: number; // arrobas totais levadas ao frigorífico

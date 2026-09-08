@@ -98,6 +98,36 @@ export function ComparadorCenários({
               })}
             </tr>
 
+            {/* Rebanho Ativo */}
+            <tr className="hover:bg-slate-800/30 transition-colors bg-slate-800/20">
+              <td className="p-3.5 sm:p-4 font-semibold text-slate-300">
+                Rebanho Ativo (Compradas / Vivas)
+              </td>
+              {cenarios.map(c => (
+                <td key={c.id} className="p-3.5 sm:p-4 font-bold text-emerald-400">
+                  {c.resultados?.rebanhoVivoAtual ?? c.variaveis?.quantidadeAnimais ?? 0} cab vivas
+                  <span className="block text-[10px] text-slate-400 font-normal">
+                    (compradas: {c.resultados?.quantidadeComprada ?? c.variaveis?.quantidadeAnimais ?? 0})
+                  </span>
+                </td>
+              ))}
+            </tr>
+
+            {/* Investimento em Compra de Gado */}
+            <tr className="hover:bg-slate-800/30 transition-colors">
+              <td className="p-3.5 sm:p-4 font-semibold text-amber-300">
+                Investimento em Compra de Gado
+              </td>
+              {cenarios.map(c => (
+                <td key={c.id} className="p-3.5 sm:p-4 font-bold text-amber-300">
+                  R$ {(c.resultados?.custoCompraAnimais ?? 0).toLocaleString('pt-BR')}
+                  <span className="block text-[10px] text-slate-400 font-normal">
+                    R$ {(c.resultados?.custoCompraPorCabeca ?? 0).toLocaleString('pt-BR')} /cab
+                  </span>
+                </td>
+              ))}
+            </tr>
+
             {/* Margem Líquida */}
             <tr className="hover:bg-slate-800/30 transition-colors">
               <td className="p-3.5 sm:p-4 font-semibold text-slate-300 flex items-center gap-2">

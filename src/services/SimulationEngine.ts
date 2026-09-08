@@ -56,6 +56,9 @@ export class SimulationEngine {
 
     // 1. Zootecnia e Rebanho
     const mortalidadeEfetiva = Math.max(0, Math.min(0.2, mortalidade || 0));
+    const quantidadeComprada = quantidadeAnimais;
+    const mortalidadeCabecas = Math.round(quantidadeAnimais * mortalidadeEfetiva);
+    const rebanhoVivoAtual = Math.max(0, quantidadeAnimais - mortalidadeCabecas);
     const animaisAbatidos = Math.round(quantidadeAnimais * (1 - mortalidadeEfetiva));
     const pesoEntradaEfetivo = pesoMedioEntrada > 0 ? pesoMedioEntrada : pesoMedioAtual;
     const ganhoPesoTotal = gmd * diasPermanencia;
@@ -108,6 +111,11 @@ export class SimulationEngine {
     } else if (precoBoiMagro && precoBoiMagro > 0) {
       custoCompraAnimais = Math.round(quantidadeAnimais * precoBoiMagro);
     }
+
+    const custoCompraPorCabeca = quantidadeAnimais > 0 ? Math.round(custoCompraAnimais / quantidadeAnimais) : 0;
+    const arrobasEntradaCabeca = pesoEntradaEfetivo / 30;
+    const arrobasEntradaTotal = Math.round(quantidadeAnimais * arrobasEntradaCabeca * 10) / 10;
+    const custoCompraPorArroba = arrobasEntradaTotal > 0 ? Math.round((custoCompraAnimais / arrobasEntradaTotal) * 100) / 100 : 0;
 
     // B) Pastagem
     const mesesPeriodo = diasPermanencia / 30;
@@ -299,6 +307,12 @@ export class SimulationEngine {
     else classificacaoRisco = 'critico';
 
     return {
+      quantidadeComprada,
+      mortalidadeCabecas,
+      rebanhoVivoAtual,
+      custoCompraPorCabeca,
+      custoCompraPorArroba,
+      arrobasEntradaTotal,
       producaoArrobas,
       totalArrobasProduzidas,
       totalArrobasAbatidas,

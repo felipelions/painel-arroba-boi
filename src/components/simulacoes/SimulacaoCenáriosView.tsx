@@ -737,6 +737,85 @@ export function SimulacaoCenáriosView() {
 
       </div>
 
+      {/* 2.5. PAINEL EXECUTIVO: REBANHO ATUAL & AQUISIÇÃO DE GADO */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-base border border-amber-500/30">
+              🐄
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                Inventário de Rebanho & Compras de Gado
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Ao Vivo
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Resumo da aquisição de animais e rebanho ativo no pasto/confinamento
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400 bg-slate-800 px-3 py-1.5 rounded-xl font-bold border border-slate-700">
+              Lotação: <strong className="text-emerald-400">{(r?.lotacaoUAPorHa ?? 0)} UA/ha</strong>
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          
+          {/* Item 1: Quantidade Comprada vs Rebanho Vivo */}
+          <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rebanho Vivo Atual</span>
+            <div className="text-lg sm:text-xl font-black text-emerald-400">
+              {(r?.rebanhoVivoAtual ?? v.quantidadeAnimais)} <span className="text-xs font-normal text-slate-400">cab</span>
+            </div>
+            <div className="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-800/60">
+              <span>Compradas: <strong className="text-white">{(r?.quantidadeComprada ?? v.quantidadeAnimais)}</strong></span>
+              <span>Mortes: <strong className="text-red-400">{(r?.mortalidadeCabecas ?? 0)}</strong></span>
+            </div>
+          </div>
+
+          {/* Item 2: Investimento Total na Compra */}
+          <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Investimento em Gado</span>
+            <div className="text-lg sm:text-xl font-black text-amber-300">
+              R$ {(r?.custoCompraAnimais ?? 0).toLocaleString('pt-BR')}
+            </div>
+            <div className="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-800/60">
+              <span>Média/Cab: <strong className="text-white">R$ {(r?.custoCompraPorCabeca ?? 0).toLocaleString('pt-BR')}</strong></span>
+            </div>
+          </div>
+
+          {/* Item 3: Preço por @ do Boi Magro */}
+          <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Preço de Compra por @</span>
+            <div className="text-lg sm:text-xl font-black text-purple-300">
+              R$ {(r?.custoCompraPorArroba ?? v.precoCompraArrobaBoiMagro ?? 0).toFixed(2)}
+              <span className="text-xs font-normal text-slate-400 ml-1">/@</span>
+            </div>
+            <div className="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-800/60">
+              <span>Total @ Entrada: <strong className="text-white">{(r?.arrobasEntradaTotal ?? 0).toLocaleString('pt-BR')} @</strong></span>
+            </div>
+          </div>
+
+          {/* Item 4: Evolução de Peso do Animal */}
+          <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Evolução no Trato</span>
+            <div className="text-lg sm:text-xl font-black text-blue-400">
+              +{((v.gmd || 0) * (v.diasPermanencia || 0)).toFixed(0)} <span className="text-xs font-normal text-slate-400">kg ganho</span>
+            </div>
+            <div className="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-800/60">
+              <span>Entrada: <strong className="text-white">{pesoEntradaEfetivo}kg</strong></span>
+              <span>Saída: <strong className="text-emerald-400">{pesoFinalCalculado}kg</strong></span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
       {/* 3. NAVEGAÇÃO DE ABAS 100% DIDÁTICA NO MOBILE */}
       <div className="grid grid-cols-4 gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl text-xs font-bold">
         
