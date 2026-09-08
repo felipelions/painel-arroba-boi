@@ -452,14 +452,8 @@ export function SimulacaoCenáriosView() {
       {/* 1. TOPO: Título, Fazenda e Ações Didáticas */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl space-y-3">
         
-        {/* Linha 1: Identificação da Fazenda & Status de Salvamento */}
-        <div className="flex items-center justify-between text-[11px] text-slate-400">
-          <div className="flex items-center gap-2 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-emerald-400 font-bold uppercase">{f.nome}</span>
-            <span>•</span>
-            <span>{f.municipio} ({f.estado})</span>
-          </div>
+        {/* Linha 1: Status de Salvamento */}
+        <div className="flex items-center justify-end text-[11px] text-slate-400">
           <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
             {saveStatus === 'salvando' ? (
               <span className="text-amber-400 font-medium">Salvando...</span>
