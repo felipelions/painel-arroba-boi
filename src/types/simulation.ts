@@ -40,31 +40,21 @@ export interface NovaCompraAnimal {
 }
 
 export interface CenarioVariaveis {
-  // 1. Mercado
   // 1. Mercado & Cotações
   precoArroba: number;
   precoProjetadoArroba: number;
   precoBezerro: number;
-  precoBoiMagro: number;
   precoBoiMagro: number; // R$/cabeça
   precoCompraArrobaBoiMagro?: number; // R$/@ de compra (ex: R$ 380/@)
   precoMilho: number; // sc 60kg
   precoFareloSoja: number; // ton
   dolar: number;
-  taxaJuros: number; // ex: 0.1125
   taxaJuros: number; // ex: 0.1125 (Selic anual)
 
-  // 2. Produção Animal
   // 2. Produção Animal & Zootecnia
   quantidadeAnimais: number;
-  pesoMedioAtual: number;
   pesoMedioAtual: number; // Peso de entrada kg
   pesoMedioEntrada: number;
-  pesoMedioSaida: number;
-  gmd: number; // Ganho médio diário kg/dia
-  rendimentoCarcaca: number; // 0.50 a 0.60
-  mortalidade: number; // 0 a 0.05
-  diasPermanencia: number;
   pesoMedioSaida: number; // Peso final kg
   gmd: number; // Ganho médio diário kg/dia (ex: 1.5)
   rendimentoCarcaca: number; // ex: 0.56 (56%)
@@ -72,23 +62,12 @@ export interface CenarioVariaveis {
   diasPermanencia: number; // Período de trato em dias (ex: 100)
   lotes: LoteAnimal[];
 
-  // 3. Compras
-  novasCompras: NovaCompraAnimal[];
   // 3. Nutrição e Ração (Planilha Produtor)
   estrategiaNutricional: 'pasto_mineral' | 'proteinado_aguas' | 'proteinado_seca' | 'semi_confinamento' | 'confinamento_total';
   custoAnimalDia: number; // R$/animal/dia (ex: R$ 13.22)
   consumoRacaoPercentPV?: number; // % do Peso Vivo (ex: 1.80%)
   precoKgRacao?: number; // R$/kg de ração (ex: R$ 1.58)
 
-  // 4. Vendas
-  dataVenda: string;
-  bonificacaoArroba: number;
-  descontoArroba: number;
-  freteVendaCabeca: number;
-  comissaoVendaPercent: number;
-
-  // 5. Pastagem
-  areaPastagem: number;
   // 4. Área da Fazenda (Alqueires vs Hectares)
   tipoMedidaArea?: 'hectares' | 'alqueires';
   areaAlqueires?: number; // ex: 5.0 alqueires
@@ -100,9 +79,6 @@ export interface CenarioVariaveis {
   reformaPastagemAreaHa: number;
   investimentoReformaHa: number;
 
-  // 6. Nutrição
-  estrategiaNutricional: 'pasto_mineral' | 'proteinado_aguas' | 'proteinado_seca' | 'semi_confinamento' | 'confinamento_total';
-  custoAnimalDia: number; // R$/animal/dia
   // 5. Custos da Operação (Planilha Produtor)
   arrendamentoMensal?: number; // R$/mês (ex: R$ 3.500)
   maoDeObraMensal?: number; // R$/mês (ex: R$ 1.500)
@@ -111,7 +87,6 @@ export interface CenarioVariaveis {
   custoSeguroCabeca?: number; // R$/cab (ex: R$ 5.00)
   outrosCustosCabecaMes: number;
 
-  // 7. Clima
   // 6. Compras de Animais
   novasCompras: NovaCompraAnimal[];
 
@@ -125,13 +100,7 @@ export interface CenarioVariaveis {
 
   // 8. Clima
   cenarioClimatico: 'normal' | 'seca_moderada' | 'seca_severa' | 'excesso_chuva';
-  impactoPastoPercent: number; // ex: -0.15 para -15%
   impactoPastoPercent: number;
-
-  // 8. Custos
-  custosFixosMensais: number;
-  custosSanitariosCabecaAno: number;
-  outrosCustosCabecaMes: number;
 
   // 9. Financeiro
   capitalDisponivel: number;
@@ -250,4 +219,3 @@ export interface HistoricoAlteracao {
   lucroAnterior: number;
   lucroNovo: number;
 }
-

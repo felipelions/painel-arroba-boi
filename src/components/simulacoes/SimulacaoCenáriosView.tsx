@@ -41,7 +41,6 @@ import {
   ArrowUpRight,
   ShieldAlert,
   Wallet,
-  Scale
   Scale,
   Percent,
   Clock,
@@ -89,7 +88,6 @@ export function SimulacaoCenáriosView() {
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const list = await StorageService.listScenarios();
       let list = await StorageService.listScenarios();
       if (!list || list.length === 0) {
         const cenarioPadrao = criarCenarioPadrao();
@@ -97,10 +95,6 @@ export function SimulacaoCenáriosView() {
         list = [cenarioPadrao];
       }
       setCenarios(list);
-      if (list.length > 0) {
-        const activeId = StorageService.getActiveScenarioId();
-        const found = list.find(c => c.id === activeId) || list[0];
-        setCenarioAtual(found);
       const activeId = StorageService.getActiveScenarioId();
       const found = list.find(c => c.id === activeId) || list[0];
       setCenarioAtual(found);
@@ -117,15 +111,12 @@ export function SimulacaoCenáriosView() {
     setTimeout(() => setToastMessage(null), 3500);
   }
 
-  // Recalcula simulação e salva com debounce
-  function updateVariable<K extends keyof CenarioVariaveis>(key: K, value: CenarioVariaveis[K]) {
   // Recalcula simulação e salva com debounce (suporta múltiplas variáveis simultâneas)
   function updateVariables(partial: Partial<CenarioVariaveis>) {
     if (!cenarioAtual) return;
 
     const novasVariaveis: CenarioVariaveis = {
       ...cenarioAtual.variaveis,
-      [key]: value
       ...partial
     };
 
@@ -318,7 +309,6 @@ export function SimulacaoCenáriosView() {
 
   // Encontra cenário base para comparação didática
   const cenarioBase = cenarios.find(c => c.isBase) || cenarios[0];
-  const diferencaLucroBase = r.lucro - cenarioBase.resultados.lucro;
   const diferencaLucroBase = r.lucro - (cenarioBase?.resultados?.lucro || 0);
 
   // Cálculos didáticos auxiliares da fazenda
@@ -515,21 +505,9 @@ export function SimulacaoCenáriosView() {
 
       </div>
 
-      {/* 2. O TERMÔMETRO DO PRODUTOR (O que sobra no bolso, preço de empate e caixa) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       {/* 2. OS 4 CARDS ESTRATÉGICOS DO PRODUTOR (DA PLANILHA) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         
-        {/* Card 1: Lucro Líquido no Bolso */}
-        <div className="sm:col-span-2 bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 border-2 border-emerald-500/40 rounded-3xl p-5 shadow-xl relative overflow-hidden">
-          <div className="flex items-center justify-between text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
-            <span className="flex items-center gap-1.5">
-              <Wallet className="w-4 h-4" />
-              Lucro Estimado no Bolso
-            </span>
-            <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full text-[11px] border border-emerald-500/30">
-              Margem {r.margemLiquida}%
-            </span>
         {/* CARD 1: LUCRO LÍQUIDO NO BOLSO (TOTAL E POR BOI) */}
         <div className="bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-900 border-2 border-emerald-500/40 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
           <div>
@@ -555,17 +533,12 @@ export function SimulacaoCenáriosView() {
             </div>
           </div>
 
-          <div className="text-3xl sm:text-5xl font-black text-white tracking-tight mt-1">
-            R$ {r.lucro.toLocaleString('pt-BR')}
           <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
             <span>Venda Líquida:</span>
             <strong className="text-slate-200">R$ {r.receitaLiquida.toLocaleString('pt-BR')}</strong>
           </div>
         </div>
 
-          <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
-            <div>
-              Receita Total da Venda: <strong className="text-slate-200">R$ {r.receitaLiquida.toLocaleString('pt-BR')}</strong>
         {/* CARD 2: CUSTO DA @ PRODUZIDA (ENGORDA) VS VENDA */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
           <div>
@@ -578,12 +551,6 @@ export function SimulacaoCenáriosView() {
                 +{ganhoPorArrobaProduzida >= 0 ? 'R$ ' + ganhoPorArrobaProduzida.toFixed(2) : '-'} /@
               </span>
             </div>
-            {diferencaLucroBase !== 0 && !cenarioAtual.isBase && (
-              <div className={`font-bold flex items-center gap-1 ${diferencaLucroBase > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-                {diferencaLucroBase > 0 ? '+' : ''}R$ {diferencaLucroBase.toLocaleString('pt-BR')} que o plano base
-              </div>
-            )}
 
             <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
               R$ {r.custoArrobaProduzida.toFixed(2)}
@@ -601,15 +568,11 @@ export function SimulacaoCenáriosView() {
           </div>
         </div>
 
-        {/* Card 2: Preço de Empate (Breakeven Didático) */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col justify-between space-y-3">
         {/* CARD 3: COMPARATIVO COM A SELIC / CDI (DA PLANILHA) */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
           <div>
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
             <div className="flex items-center justify-between text-xs font-bold text-blue-400 uppercase tracking-wider">
               <span className="flex items-center gap-1.5">
-                <Scale className="w-4 h-4 text-amber-400" />
                 <Percent className="w-4 h-4" />
                 Boi vs CDI / Selic
               </span>
@@ -651,26 +614,16 @@ export function SimulacaoCenáriosView() {
               </span>
             </div>
 
-            <div className="text-2xl sm:text-3xl font-black text-white mt-1">
             <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
               R$ {r.precoEquilibrio.toFixed(2)}
               <span className="text-xs font-normal text-slate-400 ml-1">/@</span>
             </div>
 
             <p className="text-[11px] text-slate-400 mt-1 leading-snug">
-              Preço mínimo de venda para não ter prejuízo. Vendendo a R$ {v.precoProjetadoArroba.toFixed(2)}, você está protegido.
               Preço mínimo geral no frigorífico para não tomar prejuízo na operação.
             </p>
           </div>
 
-          {/* Risco da Operação */}
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
-            <span className="text-slate-400">Risco:</span>
-            <span className={`font-bold ${
-              r.scoreRisco <= 25 ? 'text-emerald-400' : r.scoreRisco <= 50 ? 'text-amber-400' : 'text-red-400'
-            }`}>
-              {r.scoreRisco}/100 ({r.classificacaoRisco})
-            </span>
           <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
             <span>Lotação Pasto:</span>
             <strong className="text-slate-200">{r.lotacaoUAPorHa} UA/ha</strong>
@@ -744,18 +697,14 @@ export function SimulacaoCenáriosView() {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             
-            {/* CONTROLE 1: PREÇO DA ARROBA */}
             {/* CONTROLE 1: PREÇO DE VENDA DA ARROBA NO FRIGORÍFICO */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Preço de Venda da Arroba (@)
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <TrendingUp className="w-4 h-4 text-emerald-400" />
                     Venda da Arroba no Frigorífico
                   </h4>
-                  <p className="text-[11px] text-slate-400">Quanto você espera receber no frigorífico</p>
                   <p className="text-[11px] text-slate-400">Preço esperado na data de abate</p>
                 </div>
                 <div className="text-lg font-black text-emerald-400">
@@ -763,11 +712,9 @@ export function SimulacaoCenáriosView() {
                 </div>
               </div>
 
-              {/* Botões Tácteis Grandões de + e - */}
               <div className="flex items-center gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => adjustNumber('precoProjetadoArroba', -5, 200, 500)}
                   onClick={() => adjustNumber('precoProjetadoArroba', -5, 180, 500)}
                   className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
@@ -775,7 +722,6 @@ export function SimulacaoCenáriosView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => adjustNumber('precoProjetadoArroba', -1, 200, 500)}
                   onClick={() => adjustNumber('precoProjetadoArroba', -1, 180, 500)}
                   className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
@@ -783,7 +729,6 @@ export function SimulacaoCenáriosView() {
                 </button>
                 <input
                   type="range"
-                  min="240"
                   min="220"
                   max="420"
                   step="1"
@@ -793,7 +738,6 @@ export function SimulacaoCenáriosView() {
                 />
                 <button
                   type="button"
-                  onClick={() => adjustNumber('precoProjetadoArroba', 1, 200, 500)}
                   onClick={() => adjustNumber('precoProjetadoArroba', 1, 180, 500)}
                   className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
@@ -801,7 +745,6 @@ export function SimulacaoCenáriosView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => adjustNumber('precoProjetadoArroba', 5, 200, 500)}
                   onClick={() => adjustNumber('precoProjetadoArroba', 5, 180, 500)}
                   className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
@@ -815,7 +758,6 @@ export function SimulacaoCenáriosView() {
               </div>
             </div>
 
-            {/* CONTROLE 2: QUANTIDADE DE BOIS */}
             {/* CONTROLE 2: COMPRA DO BOI MAGRO (POR @ OU POR CABEÇA) */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
@@ -926,7 +868,6 @@ export function SimulacaoCenáriosView() {
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
                     Quantidade de Bois no Lote
                   </h4>
-                  <p className="text-[11px] text-slate-400">Cabeças que serão engordadas</p>
                   <p className="text-[11px] text-slate-400">Total de animais a engordar</p>
                 </div>
                 <div className="text-lg font-black text-white">
@@ -973,83 +914,17 @@ export function SimulacaoCenáriosView() {
                   +50
                 </button>
               </div>
-            </div>
 
-            {/* CONTROLE 3: GANHO MÉDIO DIÁRIO (GMD) */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Ganho de Peso por Dia (GMD)
-                  </h4>
-                  <p className="text-[11px] text-slate-400">Quantos quilos o boi engorda por dia</p>
-                </div>
-                <div className="text-lg font-black text-amber-400">
-                  {v.gmd.toFixed(2)} <span className="text-xs font-normal text-slate-400">kg/dia</span>
-                </div>
               <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
                 <span>Animais abatidos previstos (mortalidade {((v.mortalidade || 0.01) * 100).toFixed(1)}%):</span>
                 <strong className="text-white">{r.animaisAbatidos} cab</strong>
               </div>
-
-              {/* Botões Rápidos por Sistema Produtivo */}
-              <div className="flex items-center gap-1.5 pb-1">
-                <button
-                  type="button"
-                  onClick={() => updateVariable('gmd', 0.65)}
-                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 0.65 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
-                >
-                  Pasto (0.65)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateVariable('gmd', 1.05)}
-                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 1.05 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
-                >
-                  Semi (1.05)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateVariable('gmd', 1.45)}
-                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.gmd === 1.45 ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
-                >
-                  Confinamento (1.45)
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => adjustNumber('gmd', -0.05, 0.3, 2.0)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
-                >
-                  -0.05
-                </button>
-                <input
-                  type="range"
-                  min="0.4"
-                  max="1.8"
-                  step="0.05"
-                  value={v.gmd}
-                  onChange={(e) => updateVariable('gmd', parseFloat(e.target.value))}
-                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
-                />
-                <button
-                  type="button"
-                  onClick={() => adjustNumber('gmd', 0.05, 0.3, 2.0)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
-                >
-                  +0.05
-                </button>
-              </div>
             </div>
 
-            {/* CONTROLE 4: DIAS DE TRATO (PERMANÊNCIA) */}
             {/* CONTROLE 4: DIAS DE TRATO / PERMANÊNCIA */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <Clock className="w-4 h-4 text-emerald-400" />
                     Dias de Permanência / Trato
@@ -1063,20 +938,17 @@ export function SimulacaoCenáriosView() {
 
               {/* Botões Rápidos */}
               <div className="flex items-center gap-1.5 pb-1">
-                {[60, 90, 120, 180].map((dias) => (
                 {[60, 90, 100, 120, 150].map((dias) => (
                   <button
                     key={dias}
                     type="button"
                     onClick={() => updateVariable('diasPermanencia', dias)}
-                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${v.diasPermanencia === dias ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}
                     className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
                       v.diasPermanencia === dias
                         ? 'bg-emerald-600 text-white border-emerald-500'
                         : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
                     }`}
                   >
-                    {dias} dias
                     {dias}d
                   </button>
                 ))}
@@ -1114,20 +986,15 @@ export function SimulacaoCenáriosView() {
               </div>
             </div>
 
-            {/* CONTROLE 5: PESO DE ENTRADA & SAÍDA */}
             {/* CONTROLE 5: GANHO DE PESO (GMD) E PESOS DE ENTRADA/SAÍDA */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Peso Vivo de Entrada
                     Ganho Médio Diário (GMD)
                   </h4>
-                  <p className="text-[11px] text-slate-400">Peso médio que o animal entra no lote</p>
                   <p className="text-[11px] text-slate-400">Engorda diária por animal</p>
                 </div>
-                <div className="text-lg font-black text-white">
-                  {v.pesoMedioAtual} <span className="text-xs font-normal text-slate-400">kg</span>
                 <div className="text-lg font-black text-amber-400">
                   {v.gmd.toFixed(2)} <span className="text-xs font-normal text-slate-400">kg/dia</span>
                 </div>
@@ -1161,20 +1028,13 @@ export function SimulacaoCenáriosView() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => adjustNumber('pesoMedioAtual', -10, 180, 550)}
                   onClick={() => adjustNumber('gmd', -0.05, 0.3, 2.2)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
-                  -10kg
                   -0.05
                 </button>
                 <input
                   type="range"
-                  min="200"
-                  max="480"
-                  step="5"
-                  value={v.pesoMedioAtual}
-                  onChange={(e) => updateVariable('pesoMedioAtual', parseInt(e.target.value, 10))}
                   min="0.4"
                   max="1.8"
                   step="0.05"
@@ -1184,36 +1044,28 @@ export function SimulacaoCenáriosView() {
                 />
                 <button
                   type="button"
-                  onClick={() => adjustNumber('pesoMedioAtual', 10, 180, 550)}
                   onClick={() => adjustNumber('gmd', 0.05, 0.3, 2.2)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
-                  +10kg
                   +0.05
                 </button>
               </div>
 
               <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
-                <span>Peso final projetado: <strong className="text-emerald-400">{Math.round(v.pesoMedioAtual + v.gmd * v.diasPermanencia)} kg</strong></span>
-                <span>Rendimento carcaça: <strong className="text-white">{(v.rendimentoCarcaca * 100).toFixed(0)}%</strong></span>
                 <span>Entrada: <strong className="text-white">{pesoEntradaEfetivo} kg</strong></span>
                 <span>Saída: <strong className="text-emerald-400">{pesoFinalCalculado} kg ({arrobasFinal} @)</strong></span>
                 <span>Ganho: <strong className="text-amber-300">+{arrobasGanhas} @</strong></span>
               </div>
             </div>
 
-            {/* CONTROLE 6: CUSTO DA COMIDA POR DIA */}
             {/* CONTROLE 6: NUTRIÇÃO & RAÇÃO (DA PLANILHA) */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Custo de Comida por Boi / Dia
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <Zap className="w-4 h-4 text-emerald-400" />
                     Alimentação & Ração (Planilha)
                   </h4>
-                  <p className="text-[11px] text-slate-400">Gasto diário com ração, sal e trato</p>
                   <p className="text-[11px] text-slate-400">Consumo em %PV e preço do kg</p>
                 </div>
                 <div className="text-lg font-black text-amber-400">
@@ -1222,13 +1074,10 @@ export function SimulacaoCenáriosView() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
               {/* Seletor de Modo de Alimentação */}
               <div className="flex items-center gap-2 pb-1">
                 <button
                   type="button"
-                  onClick={() => adjustNumber('custoAnimalDia', -0.5, 1, 30)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                   onClick={() => setModoNutricao('planilha')}
                   className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
                     modoNutricao === 'planilha'
@@ -1236,22 +1085,10 @@ export function SimulacaoCenáriosView() {
                       : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}
                 >
-                  - R$ 0.50
                   Fórmula %PV e R$/kg
                 </button>
-                <input
-                  type="range"
-                  min="2"
-                  max="18"
-                  step="0.5"
-                  value={v.custoAnimalDia}
-                  onChange={(e) => updateVariable('custoAnimalDia', parseFloat(e.target.value))}
-                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
-                />
                 <button
                   type="button"
-                  onClick={() => adjustNumber('custoAnimalDia', 0.5, 1, 30)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                   onClick={() => setModoNutricao('direto')}
                   className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
                     modoNutricao === 'direto'
@@ -1259,14 +1096,10 @@ export function SimulacaoCenáriosView() {
                       : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}
                 >
-                  + R$ 0.50
                   Custo Diário Direto
                 </button>
               </div>
 
-              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
-                <span>Custo alimentar no período: <strong className="text-white">R$ {r.custoAlimentacao.toLocaleString('pt-BR')}</strong></span>
-              </div>
               {modoNutricao === 'planilha' ? (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
@@ -1355,7 +1188,6 @@ export function SimulacaoCenáriosView() {
 
           </div>
 
-          {/* ACORDEÃO DE CUSTOS DETALHADOS (Simples e Expansível) */}
           {/* ACORDEÃO DE CUSTOS OPERACIONAIS E ESTRUTURA (PLANILHA) */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
             <button
@@ -1364,16 +1196,12 @@ export function SimulacaoCenáriosView() {
               className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-850 transition-colors"
             >
               <div className="flex items-center gap-2.5">
-                <Zap className="w-4 h-4 text-emerald-400" />
                 <Sliders className="w-4 h-4 text-emerald-400" />
                 <div>
-                  <h4 className="text-xs font-bold text-white">Outros Custos da Fazenda</h4>
-                  <p className="text-[11px] text-slate-400">Custos fixos, remédios, frete e pastagem</p>
                   <h4 className="text-xs font-bold text-white">Custos da Fazenda (Arrendamento, Mão de Obra, Pasto e Senar)</h4>
                   <p className="text-[11px] text-slate-400">Valores fixos, impostos de abate e área de pastagem</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
               <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold">
                 <span>{showAdvancedCosts ? 'Ocultar' : 'Ajustar'}</span>
                 {showAdvancedCosts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -1381,31 +1209,23 @@ export function SimulacaoCenáriosView() {
             </button>
 
             {showAdvancedCosts && (
-              <div className="p-4 border-t border-slate-800 space-y-4 text-xs animate-fadeIn bg-slate-950/40">
               <div className="p-4 border-t border-slate-800 space-y-4 text-xs animate-fadeIn bg-slate-950/50">
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   
-                  {/* Custos Fixos */}
                   {/* Arrendamento Mensal */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
-                    <span className="font-semibold text-slate-300">Custos Fixos Mensais (R$)</span>
                     <span className="font-semibold text-slate-300">Arrendamento / Aluguel de Pasto (R$/mês)</span>
                     <input
                       type="number"
-                      step="1000"
-                      value={v.custosFixosMensais}
-                      onChange={(e) => updateVariable('custosFixosMensais', parseFloat(e.target.value) || 0)}
                       step="500"
                       value={v.arrendamentoMensal || 0}
                       onChange={(e) => updateVariable('arrendamentoMensal', parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
-                    <p className="text-[10px] text-slate-500">Funcionários, energia, manutenção</p>
                     <p className="text-[10px] text-slate-500">Ex: R$ 3.500/mês ou R$ 0 se terra própria</p>
                   </div>
 
-                  {/* Sanitário */}
                   {/* Mão de Obra Mensal */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
                     <span className="font-semibold text-slate-300">Mão de Obra / Campeiro (R$/mês)</span>
@@ -1515,23 +1335,7 @@ export function SimulacaoCenáriosView() {
                       onChange={(e) => updateVariable('custosSanitariosCabecaAno', parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
-                    <p className="text-[10px] text-slate-500">Vermífugo, aftosa, mineral sanitário</p>
                     <p className="text-[10px] text-slate-500">Vermífugo, aftosa e sanidade preventiva</p>
-                  </div>
-
-                  {/* Clima */}
-                  <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
-                    <span className="font-semibold text-slate-300">Condição do Clima</span>
-                    <select
-                      value={v.cenarioClimatico}
-                      onChange={(e) => updateVariable('cenarioClimatico', e.target.value as any)}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
-                    >
-                      <option value="normal">Normal (Chuva adequada)</option>
-                      <option value="seca_moderada">Seca Moderada</option>
-                      <option value="seca_severa">Seca Severa (Pasto seco)</option>
-                    </select>
-                    <p className="text-[10px] text-slate-500">Impacta disponibilidade de capim</p>
                   </div>
 
                 </div>

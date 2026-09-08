@@ -283,7 +283,6 @@ function generateIntelligentFallback(prompt: string) {
       precoArroba: Math.max(250, precoArroba - 10),
       precoProjetadoArroba: precoArroba,
       precoBezerro: 2400,
-      precoBoiMagro: Math.round(pesoAtual * 9.5),
       precoBoiMagro: Math.round((pesoAtual / 30) * precoCompraArrobaBoiMagro),
       precoCompraArrobaBoiMagro,
       precoMilho: 65,

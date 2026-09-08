@@ -1,9 +1,14 @@
-import { CenarioVariaveis, CenarioResultados, FazendaConfig, FluxoCaixaMes, SensibilidadeItem } from '../types/simulation';
-import { CenarioVariaveis, CenarioResultados, FazendaConfig, FluxoCaixaMes, SensibilidadeItem, ComparativoSelic } from '../types/simulation';
+import {
+  CenarioVariaveis,
+  CenarioResultados,
+  FazendaConfig,
+  FluxoCaixaMes,
+  SensibilidadeItem,
+  ComparativoSelic
+} from '../types/simulation';
 
 export class SimulationEngine {
   /**
-   * Executa a simulação determinística completa com base nas variáveis e parâmetros da fazenda.
    * Executa a simulação determinística completa com base nas variáveis e parâmetros da fazenda,
    * incorporando os parâmetros zootécnicos e financeiros da planilha de pecuária.
    */
@@ -28,7 +33,6 @@ export class SimulationEngine {
       freteVendaCabeca,
       comissaoVendaPercent,
       impostoSenarPercent = 1.63,
-      estrategiaNutricional,
       custoAnimalDia,
       consumoRacaoPercentPV,
       precoKgRacao,
@@ -47,20 +51,16 @@ export class SimulationEngine {
       taxaFinanciamentoAno,
       cenarioClimatico,
       capacidadeSuporteUA,
-      lotacaoAtualUA
       taxaJuros
     } = variaveis;
 
     // 1. Zootecnia e Rebanho
-    const mortalidadeEfetiva = Math.max(0, Math.min(0.2, mortalidade));
+    const mortalidadeEfetiva = Math.max(0, Math.min(0.2, mortalidade || 0));
     const animaisAbatidos = Math.round(quantidadeAnimais * (1 - mortalidadeEfetiva));
     const pesoEntradaEfetivo = pesoMedioEntrada > 0 ? pesoMedioEntrada : pesoMedioAtual;
     const ganhoPesoTotal = gmd * diasPermanencia;
-    const pesoFinalCalculado = pesoMedioSaida > 0 ? pesoMedioSaida : (pesoMedioAtual + ganhoPesoTotal);
     const pesoFinalCalculado = pesoMedioSaida > 0 ? pesoMedioSaida : (pesoEntradaEfetivo + ganhoPesoTotal);
     const pesoVivoFinalTotal = animaisAbatidos * pesoFinalCalculado;
-    
-    // Peso carcaça (kg) e Arrobas (@ = 15kg de carcaça)
     const pesoVivoMedio = Math.round((pesoEntradaEfetivo + pesoFinalCalculado) / 2);
 
     // Peso carcaça (kg) e Arrobas (@ = 15kg de carcaça abatida)
@@ -68,19 +68,10 @@ export class SimulationEngine {
     const producaoArrobas = Math.round((pesoCarcacaTotal / 15) * 100) / 100;
     const totalArrobasAbatidas = producaoArrobas;
 
-    // 2. Receita
-    const receitaBruta = producaoArrobas * precoProjetadoArroba;
-    const bonificacoes = producaoArrobas * bonificacaoArroba;
-    const descontos = producaoArrobas * descontoArroba;
-    const freteVendaTotal = animaisAbatidos * freteVendaCabeca;
-    const comissaoTotal = receitaBruta * (comissaoVendaPercent / 100);
-    const receitaLiquida = Math.max(0, receitaBruta + bonificacoes - descontos - freteVendaTotal - comissaoTotal);
     // Arrobas produzidas/ganhas dentro da fazenda
     const arrobasGanhasPorCabeca = Math.round(((ganhoPesoTotal * rendimentoCarcaca) / 15) * 100) / 100;
     const totalArrobasProduzidas = Math.round(arrobasGanhasPorCabeca * animaisAbatidos * 10) / 10;
 
-    // 3. Custos
-    // A) Compra de Animais (se houver novas compras cadastradas)
     // Dias para colocar 1 arroba na carcaça
     const ganhoCarcaçaDia = gmd * rendimentoCarcaca;
     const diasParaProduzirUmaArroba = ganhoCarcaçaDia > 0 ? Math.round((15 / ganhoCarcaçaDia) * 10) / 10 : 0;
@@ -118,45 +109,33 @@ export class SimulationEngine {
       custoCompraAnimais = Math.round(quantidadeAnimais * precoBoiMagro);
     }
 
-    // B) Alimentação e Nutrição
-    const custoAlimentacao = Math.round(quantidadeAnimais * custoAnimalDia * diasPermanencia);
-
-    // C) Pastagem
     // B) Pastagem
     const mesesPeriodo = diasPermanencia / 30;
     const custoManutencaoPasto = areaPastagem * (custoManutencaoPastagemHaAno * (mesesPeriodo / 12));
     const custoReformaPasto = reformaPastagemAreaHa * investimentoReformaHa;
     const custoPastagem = Math.round(custoManutencaoPasto + custoReformaPasto);
 
-    // D) Sanidade
     // C) Sanidade & Seguro
     const custoSanitario = Math.round(quantidadeAnimais * (custosSanitariosCabecaAno * (mesesPeriodo / 12)));
     const custoSeguro = Math.round(quantidadeAnimais * (custoSeguroCabeca || 0));
 
-    // E) Custos Fixos
-    const custosFixosTotal = Math.round(custosFixosMensais * mesesPeriodo);
     // D) Mão de Obra e Arrendamento
     const custoArrendamento = Math.round((arrendamentoMensal || 0) * mesesPeriodo);
     const custoMaoDeObra = Math.round((maoDeObraMensal || 0) * mesesPeriodo);
     const custosFixosGerais = Math.round(custosFixosMensais * mesesPeriodo);
     const custosFixosTotal = custosFixosGerais + custoArrendamento + custoMaoDeObra;
 
-    // F) Outros Custos Variáveis
     // E) Outros Custos Variáveis
     const custosVariaveisOutros = Math.round(quantidadeAnimais * outrosCustosCabecaMes * mesesPeriodo);
 
-    // G) Custo Financeiro
     // F) Custo Financeiro
     const custoFinanceiro = Math.round(financiamentoNecessario * (taxaFinanciamentoAno * (mesesPeriodo / 12)));
 
-    const custosVariaveisTotal = custoAlimentacao + custoSanitario + custosVariaveisOutros + custoPastagem + freteVendaTotal + comissaoTotal;
-    const custoTotal = custosFixosTotal + custosVariaveisTotal + custoCompraAnimais + custoFinanceiro;
     // Custos de Engorda (todos os custos operacionais na fazenda, excluindo a compra do animal)
     const custosVariaveisTotal = custoAlimentacao + custoSanitario + custosVariaveisOutros + custoPastagem + custoSeguro + freteVendaTotal + comissaoTotal + custoImpostosVenda;
     const custoEngorda = custoAlimentacao + custoSanitario + custosFixosTotal + custoPastagem + custoSeguro + freteVendaTotal + comissaoTotal + custoImpostosVenda + custoFinanceiro + custosVariaveisOutros;
     const custoTotal = custoCompraAnimais + custoEngorda;
 
-    // 4. Resultados Econômicos
     // 5. Resultados Econômicos do Produtor
     const lucro = Math.round((receitaLiquida - custoTotal) * 100) / 100;
     const margemLiquida = receitaLiquida > 0 ? Math.round((lucro / receitaLiquida) * 1000) / 10 : 0;
@@ -184,11 +163,10 @@ export class SimulationEngine {
     const arrobasHectare = Math.round((producaoArrobas / areaProdutiva) * 10) / 10;
     const roi = custoTotal > 0 ? Math.round((lucro / custoTotal) * 1000) / 10 : 0;
 
-    // 5. Fluxo de Caixa Mensal (projeção para o horizonte de meses da simulação, min 6, max 12)
     // 6. Comparativo com a Selic / CDI
     const taxaSelicAnual = taxaJuros > 0 ? taxaJuros : 0.1125;
     const rentabilidadeSelicPeriodo = Math.round((Math.pow(1 + taxaSelicAnual, diasPermanencia / 365) - 1) * 1000) / 10;
-    const rentabilidadeBoiPeriodo = custoTotal > 0 ? Math.round((lucro / custoTotal) * 1000) / 10 : 0;
+    const rentabilidadeBoiPeriodo = roi;
     const relacaoComSelic = rentabilidadeSelicPeriodo > 0
       ? Math.round((rentabilidadeBoiPeriodo / rentabilidadeSelicPeriodo) * 100) / 100
       : 0;
@@ -210,10 +188,9 @@ export class SimulationEngine {
     let saldoAcumulado = variaveis.capitalDisponivel;
     const nomesMeses = ['Mês 1', 'Mês 2', 'Mês 3', 'Mês 4', 'Mês 5', 'Mês 6', 'Mês 7', 'Mês 8', 'Mês 9', 'Mês 10', 'Mês 11', 'Mês 12'];
 
-    const custoFixoMes = custosFixosMensais;
     const custoFixoMes = custosFixosTotal / numMeses;
     const custoAlimentacaoMes = custoAlimentacao / numMeses;
-    const custoSanitarioMes = custoSanitario / numMeses;
+    const custoSanitarioMes = (custoSanitario + custoSeguro) / numMeses;
     const outrosVariaveisMes = custosVariaveisOutros / numMeses;
     const custoPastoMes = custoPastagem / numMeses;
 
@@ -229,11 +206,10 @@ export class SimulationEngine {
         custoMes += custoCompraAnimais;
       }
 
-      // Venda concentrada nos últimos meses ou no último mês
+      // Venda concentrada no último mês
       if (i === numMeses - 1) {
         receitaMes += receitaLiquida;
         custoMes += custoFinanceiro; // juros quitados no fechamento
-        custoMes += custoFinanceiro;
       }
 
       const saldoMensal = receitaMes - custoMes;
@@ -256,7 +232,6 @@ export class SimulationEngine {
     const capitalNecessario = menorSaldoAcumulado < 0 ? Math.abs(Math.round(menorSaldoAcumulado)) : 0;
     const mesCriticoCaixa = menorSaldoAcumulado < 0 ? nomesMeses[mesCriticoIndex] || `Mês ${mesCriticoIndex + 1}` : 'Nenhum déficit';
 
-    // 6. Análise de Sensibilidade (Impacto no lucro com variação de +10% e -10%)
     // 8. Sensibilidade (+10% / -10%)
     const sensibilidade: SensibilidadeItem[] = [
       {
@@ -291,10 +266,6 @@ export class SimulationEngine {
       }
     ].sort((a, b) => b.diferenca - a.diferenca);
 
-    // 7. Score de Risco Composto (0 a 100)
-    let scoreRisco = 25; // Base normal
-
-    // Impacto da margem de segurança
     // 9. Score de Risco Composto (0 a 100)
     let scoreRisco = 25;
     if (margemSeguranca < 5) scoreRisco += 30;
@@ -306,10 +277,8 @@ export class SimulationEngine {
     else if (capitalNecessario > 0) scoreRisco += 10;
 
     // Impacto de lotação de pastagem
-    if (capacidadeSuporteUA > 0 && lotacaoAtualUA > capacidadeSuporteUA * 1.15) {
     if (capacidadeSuporteUA > 0 && lotacaoUAPorHa > capacidadeSuporteUA * 1.15) {
       scoreRisco += 20;
-    } else if (capacidadeSuporteUA > 0 && lotacaoAtualUA > capacidadeSuporteUA) {
     } else if (capacidadeSuporteUA > 0 && lotacaoUAPorHa > capacidadeSuporteUA) {
       scoreRisco += 10;
     }
@@ -336,24 +305,6 @@ export class SimulationEngine {
       pesoVivoFinalTotal,
       pesoVivoMedio,
       animaisAbatidos,
-      receitaBruta: Math.round(receitaBruta),
-      receitaLiquida: Math.round(receitaLiquida),
-      custoCompraAnimais: Math.round(custoCompraAnimais),
-      custoAlimentacao: Math.round(custoAlimentacao),
-      custoSanitario: Math.round(custoSanitario),
-      custosFixosTotal: Math.round(custosFixosTotal),
-      custosVariaveisTotal: Math.round(custosVariaveisTotal),
-      custoPastagem: Math.round(custoPastagem),
-      custoFinanceiro: Math.round(custoFinanceiro),
-      custoTotal: Math.round(custoTotal),
-      diasParaProduzirUmaArroba,
-      diariaTotalPorCabeca,
-      lucroPorCabeca,
-      vendaPorCabeca,
-      custoPorCabeca,
-      custoArrobaProduzida,
-      custoArrobaTotalAbatida,
-      lotacaoUAPorHa,
       receitaBruta,
       receitaLiquida,
       custoCompraAnimais,
@@ -368,6 +319,14 @@ export class SimulationEngine {
       custoImpostosVenda,
       custoFinanceiro,
       custoTotal,
+      diasParaProduzirUmaArroba,
+      diariaTotalPorCabeca,
+      lucroPorCabeca,
+      vendaPorCabeca,
+      custoPorCabeca,
+      custoArrobaProduzida,
+      custoArrobaTotalAbatida,
+      lotacaoUAPorHa,
       lucro,
       margemLiquida,
       custoArroba,
@@ -386,4 +345,3 @@ export class SimulationEngine {
     };
   }
 }
-
