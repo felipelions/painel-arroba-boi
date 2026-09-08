@@ -9,9 +9,9 @@ interface PriceChartProps {
 export function PriceChart({ data, loading }: PriceChartProps) {
   if (loading) {
     return (
-      <div className="bg-slate-800/50 rounded-xl p-4 sm:p-6 border border-slate-700/50 animate-pulse">
-        <div className="h-6 bg-slate-700 rounded w-48 mb-6" />
-        <div className="h-64 sm:h-80 bg-slate-700 rounded" />
+      <div className="bg-slate-900/90 rounded-3xl p-4 sm:p-6 border border-slate-800 animate-pulse">
+        <div className="h-5 bg-slate-800 rounded w-44 mb-4" />
+        <div className="h-56 sm:h-72 bg-slate-800/60 rounded-2xl" />
       </div>
     );
   }
@@ -33,7 +33,7 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     valor: item.valores.reduce((sum, v) => sum + v, 0) / item.valores.length
   }));
 
-  // Downsample weekly when too many points (keeps multi-year readable)
+  // Downsample semanal se houver muitos pontos
   let chartData = series;
   let downsampled = false;
   if (series.length > 800) {
@@ -53,57 +53,64 @@ export function PriceChart({ data, loading }: PriceChartProps) {
   }
 
   return (
-    <div className="bg-slate-800/50 rounded-xl p-4 sm:p-6 border border-slate-700/50">
-      <h3 className="text-lg font-semibold text-white mb-6">Histórico de Preços</h3>
-      {downsampled && (
-        <p className="text-xs text-slate-400 mb-3">Média semanal ({chartData.length} pontos) — período longo</p>
-      )}
-      
-      <div className="w-full h-64 sm:h-80">
+    <div className="bg-slate-900/90 rounded-3xl p-4 sm:p-6 border border-slate-800 shadow-xl space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+          📈 Histórico de Preços da Arroba
+        </h3>
+        {downsampled && (
+          <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+            Média semanal
+          </span>
+        )}
+      </div>
+
+      <div className="w-full h-56 sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+          <LineChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
             <XAxis 
               dataKey="data" 
-              stroke="#94a3b8"
-              tick={{ fill: '#94a3b8', fontSize: 12 }}
-              tickLine={{ stroke: '#334155' }}
+              stroke="#64748b"
+              tick={{ fill: '#64748b', fontSize: 10 }}
+              tickLine={{ stroke: '#1e293b' }}
             />
             <YAxis 
-              stroke="#94a3b8"
-              tick={{ fill: '#94a3b8', fontSize: 12 }}
-              tickLine={{ stroke: '#334155' }}
+              stroke="#64748b"
+              tick={{ fill: '#64748b', fontSize: 10 }}
+              tickLine={{ stroke: '#1e293b' }}
               tickFormatter={(value) => `R$${value.toFixed(0)}`}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#1e293b',
+                backgroundColor: '#0f172a',
                 border: '1px solid #334155',
-                borderRadius: '8px',
-                color: '#fff'
+                borderRadius: '12px',
+                color: '#fff',
+                fontSize: '12px'
               }}
               formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Valor']}
               labelStyle={{ color: '#94a3b8' }}
             />
             <Legend 
-              wrapperStyle={{ color: '#94a3b8' }}
+              wrapperStyle={{ color: '#94a3b8', fontSize: '11px' }}
               iconType="line"
             />
             <Line 
               type="monotone" 
               dataKey="valor" 
               stroke="#10b981" 
-              strokeWidth={2}
+              strokeWidth={2.5}
               dot={false}
-              name="Preço da Arroba"
-              activeDot={{ r: 6, fill: '#10b981' }}
+              name="Cotação (@)"
+              activeDot={{ r: 5, fill: '#10b981' }}
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
       
       {data.length === 0 && (
-        <div className="text-center py-8 text-slate-400">
+        <div className="text-center py-6 text-slate-400 text-xs">
           Nenhum dado disponível para o período selecionado
         </div>
       )}

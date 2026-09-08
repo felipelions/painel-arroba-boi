@@ -22,10 +22,10 @@ export function KPICard({
 }: KPICardProps) {
   if (loading) {
     return (
-      <div className="bg-slate-800/50 rounded-xl p-4 sm:p-6 border border-slate-700/50 animate-pulse">
-        <div className="h-4 bg-slate-700 rounded w-24 mb-3" />
-        <div className="h-8 bg-slate-700 rounded w-32 mb-2" />
-        <div className="h-3 bg-slate-700 rounded w-20" />
+      <div className="bg-slate-900/80 rounded-2xl p-3.5 sm:p-5 border border-slate-800 animate-pulse">
+        <div className="h-3 bg-slate-800 rounded w-20 mb-2.5" />
+        <div className="h-6 bg-slate-800 rounded w-28 mb-2" />
+        <div className="h-3 bg-slate-800 rounded w-16" />
       </div>
     );
   }
@@ -38,25 +38,25 @@ export function KPICard({
     : 'text-slate-400';
 
   return (
-    <div className="bg-slate-800/50 rounded-xl p-4 sm:p-6 border border-slate-700/50 hover:border-emerald-500/30 transition-colors">
-      <div className="flex items-start justify-between mb-3">
-        <h3 className="text-sm font-medium text-slate-400">{title}</h3>
-        {icon && <div className="text-emerald-500">{icon}</div>}
+    <div className="bg-slate-900/90 rounded-2xl p-3.5 sm:p-5 border border-slate-800 hover:border-emerald-500/40 transition-all shadow-lg flex flex-col justify-between">
+      <div className="flex items-start justify-between gap-1 mb-2">
+        <h3 className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</h3>
+        {icon && <div className="text-emerald-400 shrink-0">{icon}</div>}
       </div>
       
       <div className="space-y-1">
-        <p className="text-2xl sm:text-3xl font-bold text-white">{value}</p>
+        <p className="text-lg sm:text-2xl font-black text-white tracking-tight">{value}</p>
         
         {(subtitle || trendValue) && (
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs">
             {trendValue && (
-              <span className={`flex items-center gap-1 ${trendColor}`}>
+              <span className={`flex items-center gap-0.5 font-bold ${trendColor}`}>
                 <TrendIcon className="w-3 h-3" />
                 {trendValue}
               </span>
             )}
             {subtitle && (
-              <span className="text-slate-400">{subtitle}</span>
+              <span className="text-slate-400 truncate">{subtitle}</span>
             )}
           </div>
         )}
