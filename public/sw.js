@@ -1,4 +1,4 @@
-const CACHE_NAME = 'arroba-boi-v1';
+const CACHE_NAME = 'arroba-boi-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -6,76 +6,55 @@ const STATIC_ASSETS = [
   '/index.css'
 ];
 
-// Instalação: pré-cacheia recursos fundamentais
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
   );
 });
 
-// Ativação: limpa caches antigos se houver
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then((keys) => {
       return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
       );
     }).then(() => self.clients.claim())
   );
 });
 
-// Estratégia de Fetch: Network-First com Fallback para Cache (Excelente para PWA Offline)
 self.addEventListener('fetch', (event) => {
-  // Ignora requisições de extensões do navegador ou esquemas não-HTTP
-  if (!event.request.url.startsWith('http')) return;
+  const url = event.request.url;
 
-  // Para navegação de páginas e API de cenários
-  if (event.request.mode === 'navigate' || event.request.url.includes('/api/cenarios')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // Se offline, retorna do cache
-          return caches.match(event.request).then((cached) => {
-            if (cached) return cached;
-            if (event.request.mode === 'navigate') {
-              return caches.match('/');
-            }
-            return new Response(JSON.stringify({ error: 'Você está offline. Exibindo dados locais.' }), {
-              headers: { 'Content-Type': 'application/json' }
-            });
-          });
-        })
-    );
+  // Ignorar requisições não-GET, dev server, HMR, extensões ou WebSocket
+  if (
+    event.request.method !== 'GET' ||
+    !url.startsWith('http') ||
+    url.includes('/_next/') ||
+    url.includes('webpack-hmr') ||
+    url.includes('browser-sync')
+  ) {
     return;
   }
 
-  // Para arquivos estáticos (JS, CSS, imagens, fontes): Stale-While-Revalidate
+  // Network First para rotas com fallback offline
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
         }
-        return networkResponse;
-      }).catch(() => cachedResponse);
-
-      return cachedResponse || fetchPromise;
-    })
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          if (event.request.mode === 'navigate') {
+            return caches.match('/');
+          }
+        });
+      })
   );
 });

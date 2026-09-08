@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Download, WifiOff, X, Smartphone, Check } from 'lucide-react';
+import { Download, WifiOff, X, Smartphone } from 'lucide-react';
 
 export function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -11,21 +11,27 @@ export function PWAInstallPrompt() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // Registrar Service Worker
-    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(
-          (registration) => {
-            console.log('PWA ServiceWorker registrado com sucesso:', registration.scope);
-          },
-          (err) => {
-            console.warn('Falha no registro do ServiceWorker:', err);
+    // Registrar Service Worker apenas em produção para não interferir no servidor de dev
+    if ('serviceWorker' in navigator) {
+      if (process.env.NODE_ENV === 'production') {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(
+            (registration) => {
+              console.log('PWA ServiceWorker registrado:', registration.scope);
+            },
+            (err) => {
+              console.warn('Falha no ServiceWorker:', err);
+            }
+          );
+        });
+      } else {
+        // Em dev, desregistra qualquer Service Worker ativo para não travar reloads
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) {
+            reg.unregister();
           }
-        );
-      });
-    } else if ('serviceWorker' in navigator) {
-      // Registrar também em dev para teste offline
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
     }
 
     // Monitorar status online/offline
