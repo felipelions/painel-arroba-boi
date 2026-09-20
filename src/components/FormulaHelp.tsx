@@ -54,22 +54,32 @@ export function FormulaHelp({
 
   return (
     <span ref={ref} className={`relative inline-flex align-middle ${className}`}>
-      <button
-        type="button"
+      <span
+        role="button"
+        tabIndex={0}
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
           setAberto((s) => !s);
         }}
-        className="inline-flex items-center justify-center w-4 h-4 rounded-full text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors shrink-0"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            setAberto((s) => !s);
+          }
+        }}
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors shrink-0 cursor-pointer"
         aria-label={`Como calcula: ${titulo}`}
         aria-expanded={aberto}
       >
         <HelpCircle className="w-3.5 h-3.5" />
-      </button>
+      </span>
       {aberto && (
         <span
           role="tooltip"
           className={`absolute z-50 bottom-full mb-2 w-64 sm:w-72 p-2.5 rounded-xl bg-slate-950 border border-emerald-500/40 shadow-2xl text-left whitespace-normal ${pos}`}
+          onClick={(e) => e.stopPropagation()}
         >
           <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-1">
             {titulo}

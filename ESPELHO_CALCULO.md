@@ -81,14 +81,14 @@ ração_R$/cab/dia    = consumo_kg × preço_R$/kg
 custo_alimentação  += quantidade × ração_R$/cab/dia
 ```
 
-**Rendimento diário de carcaça** (acompanhamento):
+**Rendimento / ganho vivo diário** (painel de ração — sem carcaça):
 
 ```
-kg_carcaça/dia = GMD × rendimento
-@ / dia        = kg_carcaça/dia ÷ 15
+peso_vivo_dia   = entrada + GMD × (dia − 1)
+ganho_acumulado = GMD × dias decorridos
 ```
 
-O painel `RacaoAcumuladaPanel` mostra peso, ração e @ acumulados dia a dia.
+O painel `RacaoAcumuladaPanel` mostra peso vivo e ração acumulados, com visualização **por dia** ou **por semana**.
 
 ---
 
