@@ -67,6 +67,7 @@ export interface CenarioVariaveis {
   custoAnimalDia: number; // R$/animal/dia (ex: R$ 13.22)
   consumoRacaoPercentPV?: number; // % do Peso Vivo (ex: 1.80%)
   precoKgRacao?: number; // R$/kg de ração (ex: R$ 1.58)
+  pesoBaseAlimentacao?: number; // kg de referência para %PV (0 = média entrada/saída)
 
   // 4. Área da Fazenda (Alqueires vs Hectares)
   tipoMedidaArea?: 'hectares' | 'alqueires';
@@ -157,6 +158,15 @@ export interface CenarioResultados {
   custoArrobaProduzida: number; // R$/@ engordada na fazenda (ex: R$ 229,52)
   custoArrobaTotalAbatida: number; // R$/@ total abatida (ex: R$ 338,98)
   lotacaoUAPorHa: number; // UA/ha calculado (ex: 3.1)
+
+  // Rendimento de carcaça
+  rendimentoCarcacaPct: number; // ex: 54
+  pesoCarcacaPorCabeca: number; // kg de carcaça / animal
+  arrobasCarcacaPorCabeca: number; // @ carcaça / animal
+  custoPorKgCarcaca: number; // R$/kg de carcaça
+  custoRendimentoPorCabeca: number; // R$/kg carcaça só da aquisição (compra ÷ kg carcaça)
+  impactoUmPontoRendimento: number; // R$ no lote se o rendimento sobe 1 p.p.
+  kgVivoPorArrobaCarcaca: number; // kg vivo necessários para 1 @ carcaça (15 / rendimento)
 
   // Totais
   receitaBruta: number;

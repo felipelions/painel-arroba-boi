@@ -36,6 +36,7 @@ export class SimulationEngine {
       custoAnimalDia,
       consumoRacaoPercentPV,
       precoKgRacao,
+      pesoBaseAlimentacao,
       areaPastagem,
       custoManutencaoPastagemHaAno,
       reformaPastagemAreaHa,
@@ -67,22 +68,31 @@ export class SimulationEngine {
     const pesoVivoMedio = Math.round((pesoEntradaEfetivo + pesoFinalCalculado) / 2);
 
     // Peso carcaça (kg) e Arrobas (@ = 15kg de carcaça abatida)
-    const pesoCarcacaTotal = pesoVivoFinalTotal * rendimentoCarcaca;
+    const rendimentoEfetivo = Math.max(0.40, Math.min(0.65, rendimentoCarcaca || 0.54));
+    const rendimentoCarcacaPct = Math.round(rendimentoEfetivo * 1000) / 10;
+    const pesoCarcacaTotal = pesoVivoFinalTotal * rendimentoEfetivo;
     const producaoArrobas = Math.round((pesoCarcacaTotal / 15) * 100) / 100;
     const totalArrobasAbatidas = producaoArrobas;
+    const pesoCarcacaPorCabeca = animaisAbatidos > 0
+      ? Math.round((pesoCarcacaTotal / animaisAbatidos) * 10) / 10
+      : Math.round(pesoFinalCalculado * rendimentoEfetivo * 10) / 10;
+    const arrobasCarcacaPorCabeca = Math.round((pesoCarcacaPorCabeca / 15) * 100) / 100;
+    const kgVivoPorArrobaCarcaca = Math.round((15 / rendimentoEfetivo) * 10) / 10;
 
-    // Arrobas produzidas/ganhas dentro da fazenda
-    const arrobasGanhasPorCabeca = Math.round(((ganhoPesoTotal * rendimentoCarcaca) / 15) * 100) / 100;
+    // Arrobas produzidas/ganhas dentro da fazenda (ganho real de peso × rendimento)
+    const ganhoPesoEfetivo = Math.max(0, pesoFinalCalculado - pesoEntradaEfetivo);
+    const arrobasGanhasPorCabeca = Math.round(((ganhoPesoEfetivo * rendimentoEfetivo) / 15) * 100) / 100;
     const totalArrobasProduzidas = Math.round(arrobasGanhasPorCabeca * animaisAbatidos * 10) / 10;
 
     // Dias para colocar 1 arroba na carcaça
-    const ganhoCarcaçaDia = gmd * rendimentoCarcaca;
+    const ganhoCarcaçaDia = gmd * rendimentoEfetivo;
     const diasParaProduzirUmaArroba = ganhoCarcaçaDia > 0 ? Math.round((15 / ganhoCarcaçaDia) * 10) / 10 : 0;
 
     // 2. Nutrição e Alimentação (Cálculo Direto ou %PV e Preço/kg da Ração)
+    const pesoParaRacao = pesoBaseAlimentacao && pesoBaseAlimentacao > 0 ? pesoBaseAlimentacao : pesoVivoMedio;
     let custoAnimalDiaEfetivo = custoAnimalDia;
     if (consumoRacaoPercentPV && consumoRacaoPercentPV > 0 && precoKgRacao && precoKgRacao > 0) {
-      const consumoDiarioKg = pesoVivoMedio * (consumoRacaoPercentPV / 100);
+      const consumoDiarioKg = pesoParaRacao * (consumoRacaoPercentPV / 100);
       custoAnimalDiaEfetivo = Math.round(consumoDiarioKg * precoKgRacao * 100) / 100;
     }
     const custoAlimentacao = Math.round(quantidadeAnimais * custoAnimalDiaEfetivo * diasPermanencia);
@@ -139,9 +149,10 @@ export class SimulationEngine {
     // F) Custo Financeiro
     const custoFinanceiro = Math.round(financiamentoNecessario * (taxaFinanciamentoAno * (mesesPeriodo / 12)));
 
-    // Custos de Engorda (todos os custos operacionais na fazenda, excluindo a compra do animal)
-    const custosVariaveisTotal = custoAlimentacao + custoSanitario + custosVariaveisOutros + custoPastagem + custoSeguro + freteVendaTotal + comissaoTotal + custoImpostosVenda;
-    const custoEngorda = custoAlimentacao + custoSanitario + custosFixosTotal + custoPastagem + custoSeguro + freteVendaTotal + comissaoTotal + custoImpostosVenda + custoFinanceiro + custosVariaveisOutros;
+    // Frete/comissão/Senar já saíram da receita líquida — não entram de novo no custo
+    // (evita contagem dupla no lucro, ROI e teto de leilão)
+    const custosVariaveisTotal = custoAlimentacao + custoSanitario + custosVariaveisOutros + custoPastagem + custoSeguro;
+    const custoEngorda = custoAlimentacao + custoSanitario + custosFixosTotal + custoPastagem + custoSeguro + custoFinanceiro + custosVariaveisOutros;
     const custoTotal = custoCompraAnimais + custoEngorda;
 
     // 5. Resultados Econômicos do Produtor
@@ -162,6 +173,17 @@ export class SimulationEngine {
     const diariaTotalPorCabeca = (quantidadeAnimais > 0 && diasPermanencia > 0)
       ? Math.round((custoEngorda / (quantidadeAnimais * diasPermanencia)) * 100) / 100
       : 0;
+    const custoPorKgCarcaca = pesoCarcacaTotal > 0
+      ? Math.round((custoTotal / pesoCarcacaTotal) * 100) / 100
+      : 0;
+    // Custo de aquisição diluído no kg de carcaça (efeito direto do rendimento)
+    const custoRendimentoPorCabeca = pesoCarcacaPorCabeca > 0
+      ? Math.round((custoCompraPorCabeca / pesoCarcacaPorCabeca) * 100) / 100
+      : 0;
+    // Impacto aproximado de +1 p.p. no rendimento sobre a receita bruta do lote
+    const impactoUmPontoRendimento = Math.round(
+      ((pesoVivoFinalTotal * 0.01) / 15) * precoProjetadoArroba
+    );
 
     // Lotação em UA/ha (1 UA = 450 kg de peso vivo)
     const areaProdutiva = fazenda.areaProdutiva > 0 ? fazenda.areaProdutiva : (areaPastagem > 0 ? areaPastagem : 1);
@@ -250,9 +272,9 @@ export class SimulationEngine {
       },
       {
         fator: 'Ganho Médio Diário (GMD)',
-        impactoMais10: Math.round(animaisAbatidos * (gmd * 0.1 * diasPermanencia * rendimentoCarcaca / 15) * precoProjetadoArroba),
-        impactoMenos10: -Math.round(animaisAbatidos * (gmd * 0.1 * diasPermanencia * rendimentoCarcaca / 15) * precoProjetadoArroba),
-        diferenca: Math.round(animaisAbatidos * (gmd * 0.2 * diasPermanencia * rendimentoCarcaca / 15) * precoProjetadoArroba)
+        impactoMais10: Math.round(animaisAbatidos * (gmd * 0.1 * diasPermanencia * rendimentoEfetivo / 15) * precoProjetadoArroba),
+        impactoMenos10: -Math.round(animaisAbatidos * (gmd * 0.1 * diasPermanencia * rendimentoEfetivo / 15) * precoProjetadoArroba),
+        diferenca: Math.round(animaisAbatidos * (gmd * 0.2 * diasPermanencia * rendimentoEfetivo / 15) * precoProjetadoArroba)
       },
       {
         fator: 'Custo Alimentar (R$/dia)',
@@ -341,6 +363,13 @@ export class SimulationEngine {
       custoArrobaProduzida,
       custoArrobaTotalAbatida,
       lotacaoUAPorHa,
+      rendimentoCarcacaPct,
+      pesoCarcacaPorCabeca,
+      arrobasCarcacaPorCabeca,
+      custoPorKgCarcaca,
+      custoRendimentoPorCabeca,
+      impactoUmPontoRendimento,
+      kgVivoPorArrobaCarcaca,
       lucro,
       margemLiquida,
       custoArroba,

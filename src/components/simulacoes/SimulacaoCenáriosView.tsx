@@ -11,6 +11,9 @@ import { InsightEngine } from '../../services/InsightEngine';
 import { StorageService } from '../../services/StorageService';
 import { ModalPreencherIA } from './ModalPreencherIA';
 import { ComparadorCenários } from './ComparadorCenários';
+import { GastosPorDiaPanel } from './GastosPorDiaPanel';
+import { ResumoFinanceiroView } from './ResumoFinanceiroView';
+import { LeilaoMaximoView } from './LeilaoMaximoView';
 import {
   Sparkles,
   Mic,
@@ -44,7 +47,9 @@ import {
   Scale,
   Percent,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Landmark,
+  Gavel
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -145,13 +150,19 @@ function criarCenarioPadrao(): CenarioCompleto {
   };
 }
 
+function calcCustoRacaoDia(pesoKg: number, percentPV: number, precoKg: number) {
+  const peso = Number.isFinite(pesoKg) && pesoKg > 0 ? pesoKg : 0;
+  const consumo = peso * (percentPV / 100);
+  return Math.round(consumo * precoKg * 100) / 100;
+}
+
 export function SimulacaoCenáriosView() {
   const [cenarios, setCenarios] = useState<CenarioCompleto[]>([]);
   const [cenarioAtual, setCenarioAtual] = useState<CenarioCompleto | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Abas didáticas simplificadas
-  const [activeTab, setActiveTab] = useState<'simulador' | 'resultado' | 'diagnostico' | 'comparador'>('simulador');
+  const [activeTab, setActiveTab] = useState<'simulador' | 'resumo' | 'leilao' | 'resultado' | 'diagnostico' | 'comparador'>('simulador');
   
   // Modos de entrada
   const [modoCompraGado, setModoCompraGado] = useState<'arroba' | 'cabeca'>('arroba');
@@ -255,6 +266,54 @@ export function SimulacaoCenáriosView() {
     const current = Number(cenarioAtual.variaveis[key]) || 0;
     const next = Math.max(min, Math.min(max, Math.round((current + delta) * 100) / 100));
     updateVariable(key, next as any);
+  }
+
+  // Arrobas de entrada do boi magro (1 @ vivo = 30 kg). Atualiza o peso e o custo de compra.
+  function updateArrobasEntrada(arrobas: number) {
+    if (!cenarioAtual || !Number.isFinite(arrobas)) return;
+    const clamped = Math.max(6, Math.min(22, Math.round(arrobas * 10) / 10));
+    const pesoKg = Math.round(clamped * 30);
+    const vars = cenarioAtual.variaveis;
+    const pesoAtual = vars.pesoMedioEntrada > 0 ? vars.pesoMedioEntrada : vars.pesoMedioAtual;
+    const arrobasAtuais = Math.max(0.1, Math.round((pesoAtual / 30) * 10) / 10);
+    const precoPorArroba = vars.precoCompraArrobaBoiMagro && vars.precoCompraArrobaBoiMagro > 0
+      ? vars.precoCompraArrobaBoiMagro
+      : Math.round(((vars.precoBoiMagro || 3800) / arrobasAtuais) * 100) / 100;
+    updateVariables({
+      pesoMedioEntrada: pesoKg,
+      pesoMedioAtual: pesoKg,
+      precoBoiMagro: Math.round(clamped * precoPorArroba)
+    });
+  }
+
+  function updateRendimentoCarcacaPct(pct: number) {
+    if (!Number.isFinite(pct)) return;
+    const clamped = Math.max(45, Math.min(62, Math.round(pct * 10) / 10));
+    updateVariable('rendimentoCarcaca', clamped / 100);
+  }
+
+  function updatePesoBaseAlimentacao(peso: number) {
+    if (!cenarioAtual || !Number.isFinite(peso)) return;
+    const clamped = Math.max(150, Math.min(800, Math.round(peso)));
+    const vars = cenarioAtual.variaveis;
+    updateVariables({
+      pesoBaseAlimentacao: clamped,
+      custoAnimalDia: calcCustoRacaoDia(clamped, vars.consumoRacaoPercentPV || 1.80, vars.precoKgRacao || 1.58)
+    });
+  }
+
+  function usarMediaPesoAlimentacao() {
+    if (!cenarioAtual) return;
+    const vars = cenarioAtual.variaveis;
+    const pesoEntrada = vars.pesoMedioEntrada > 0 ? vars.pesoMedioEntrada : vars.pesoMedioAtual;
+    const pesoSaida = vars.pesoMedioSaida > 0
+      ? vars.pesoMedioSaida
+      : Math.round(pesoEntrada + vars.gmd * vars.diasPermanencia);
+    const media = Math.round((pesoEntrada + pesoSaida) / 2);
+    updateVariables({
+      pesoBaseAlimentacao: 0,
+      custoAnimalDia: calcCustoRacaoDia(media, vars.consumoRacaoPercentPV || 1.80, vars.precoKgRacao || 1.58)
+    });
   }
 
   function handleSelectCenario(id: string) {
@@ -425,12 +484,30 @@ export function SimulacaoCenáriosView() {
 
   const pesoFinalCalculado = v.pesoMedioSaida > 0 ? v.pesoMedioSaida : Math.round(pesoEntradaEfetivo + v.gmd * v.diasPermanencia);
   const arrobasFinal = Math.round(((pesoFinalCalculado * v.rendimentoCarcaca) / 15) * 10) / 10;
-  const arrobasGanhas = Math.max(0, Math.round((arrobasFinal - arrobasEntrada) * 10) / 10);
+  // Ganho em @ de carcaça (mesma base da saída — não misturar com @ viva de entrada)
+  const arrobasGanhas = Math.max(
+    0,
+    Math.round((((pesoFinalCalculado - pesoEntradaEfetivo) * (v.rendimentoCarcaca || 0.54)) / 15) * 10) / 10
+  );
   const ganhoPorArrobaProduzida = Math.round((v.precoProjetadoArroba - (r.custoArrobaProduzida || 0)) * 100) / 100;
-  const consumoKgRacaoDia = Math.round((r.pesoVivoMedio * ((v.consumoRacaoPercentPV || 1.80) / 100)) * 100) / 100;
+  const pesoMedioLote = Number.isFinite(r?.pesoVivoMedio) && (r?.pesoVivoMedio ?? 0) > 0
+    ? r.pesoVivoMedio
+    : Math.round((pesoEntradaEfetivo + pesoFinalCalculado) / 2);
+  const pesoBaseAlimentacao = v.pesoBaseAlimentacao && v.pesoBaseAlimentacao > 0
+    ? v.pesoBaseAlimentacao
+    : pesoMedioLote;
+  const usandoMediaLote = !(v.pesoBaseAlimentacao && v.pesoBaseAlimentacao > 0);
+  const consumoKgRacaoDia = Math.round((pesoBaseAlimentacao * ((v.consumoRacaoPercentPV || 1.80) / 100)) * 100) / 100;
+  const rendimentoPct = Math.round(((v.rendimentoCarcaca || 0.54) * 100) * 10) / 10;
+  const pesoCarcacaCabeca = r?.pesoCarcacaPorCabeca
+    ?? Math.round(pesoFinalCalculado * (v.rendimentoCarcaca || 0.54) * 10) / 10;
+  const arrobasCarcacaCabeca = r?.arrobasCarcacaPorCabeca
+    ?? Math.round((pesoCarcacaCabeca / 15) * 100) / 100;
+  const kgVivoPorArroba = r?.kgVivoPorArrobaCarcaca
+    ?? Math.round((15 / (v.rendimentoCarcaca || 0.54)) * 10) / 10;
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-4 sm:space-y-6 max-w-5xl mx-auto pb-28 sm:pb-12">
       
       {/* Notificação Toast */}
       {toastMessage && (
@@ -607,13 +684,13 @@ export function SimulacaoCenáriosView() {
       {/* 2. OS 4 CARDS ESTRATÉGICOS DO PRODUTOR (DA PLANILHA) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         
-        {/* CARD 1: LUCRO LÍQUIDO NO BOLSO (TOTAL E POR BOI) */}
+        {/* CARD 1: VALOR PURO DO GANHO (AQUISIÇÃO → RECEBIDO → SOBRA) */}
         <div className="bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-900 border-2 border-emerald-500/40 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col justify-between space-y-3">
           <div>
             <div className="flex items-center justify-between text-xs font-bold text-emerald-400 uppercase tracking-wider">
               <span className="flex items-center gap-1.5">
                 <Wallet className="w-4 h-4" />
-                Lucro no Bolso
+                Valor Puro do Ganho
               </span>
               <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[10px] border border-emerald-500/30">
                 {r?.margemLiquida ?? 0}% margem
@@ -621,20 +698,24 @@ export function SimulacaoCenáriosView() {
             </div>
 
             <div className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2">
-              R$ {(r?.lucro ?? 0).toLocaleString('pt-BR')}
+              {(r?.lucro ?? 0) >= 0 ? '+' : ''}R$ {(r?.lucro ?? 0).toLocaleString('pt-BR')}
             </div>
 
-            {/* Destaque Didático: Sobra por Boi */}
             <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold text-xs">
-              <span>Sobra limpa:</span>
+              <span>Por boi:</span>
               <strong className="text-white text-sm">R$ {(r?.lucroPorCabeca ?? 0).toLocaleString('pt-BR')}</strong>
-              <span className="text-[10px] font-normal text-slate-400">/boi</span>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Venda Líquida:</span>
-            <strong className="text-slate-200">R$ {(r?.receitaLiquida ?? 0).toLocaleString('pt-BR')}</strong>
+          <div className="pt-2 border-t border-slate-800/80 space-y-1 text-[11px]">
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Aquisição do gado</span>
+              <strong className="text-amber-300">R$ {(r?.custoCompraAnimais ?? 0).toLocaleString('pt-BR')}</strong>
+            </div>
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Total recebido</span>
+              <strong className="text-slate-200">R$ {(r?.receitaLiquida ?? 0).toLocaleString('pt-BR')}</strong>
+            </div>
           </div>
         </div>
 
@@ -766,7 +847,7 @@ export function SimulacaoCenáriosView() {
             <div className="text-lg sm:text-xl font-black text-emerald-400">
               {(r?.rebanhoVivoAtual ?? v.quantidadeAnimais)} <span className="text-xs font-normal text-slate-400">cab</span>
             </div>
-            <div className="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-800/60">
+            <div className="text-[10px] text-slate-400 flex flex-col gap-0.5 pt-1 border-t border-slate-800/60">
               <span>Compradas: <strong className="text-white">{(r?.quantidadeComprada ?? v.quantidadeAnimais)}</strong></span>
               <span>Mortes: <strong className="text-red-400">{(r?.mortalidadeCabecas ?? 0)}</strong></span>
             </div>
@@ -801,7 +882,7 @@ export function SimulacaoCenáriosView() {
             <div className="text-lg sm:text-xl font-black text-blue-400">
               +{((v.gmd || 0) * (v.diasPermanencia || 0)).toFixed(0)} <span className="text-xs font-normal text-slate-400">kg ganho</span>
             </div>
-            <div className="text-[10px] text-slate-400 flex justify-between pt-1 border-t border-slate-800/60">
+            <div className="text-[10px] text-slate-400 flex flex-col gap-0.5 pt-1 border-t border-slate-800/60">
               <span>Entrada: <strong className="text-white">{pesoEntradaEfetivo}kg</strong></span>
               <span>Saída: <strong className="text-emerald-400">{pesoFinalCalculado}kg</strong></span>
             </div>
@@ -810,58 +891,86 @@ export function SimulacaoCenáriosView() {
         </div>
       </div>
 
-      {/* 3. NAVEGAÇÃO DE ABAS 100% DIDÁTICA NO MOBILE */}
-      <div className="grid grid-cols-4 gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl text-xs font-bold">
+      <GastosPorDiaPanel resultados={r} variaveis={v} variante="compacto" />
+
+      {/* 3. NAVEGAÇÃO DE ABAS — mobile-first */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl text-[10px] sm:text-xs font-bold">
         
         <button
           type="button"
           onClick={() => setActiveTab('simulador')}
-          className={`py-2.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
             activeTab === 'simulador'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Sliders className="w-4 h-4" />
-          <span>Ajustar Contas</span>
+          <Sliders className="w-4 h-4 shrink-0" />
+          <span>Contas</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('resumo')}
+          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+            activeTab === 'resumo'
+              ? 'bg-emerald-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Landmark className="w-4 h-4 shrink-0" />
+          <span>Resumo</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('leilao')}
+          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+            activeTab === 'leilao'
+              ? 'bg-emerald-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Gavel className="w-4 h-4 shrink-0" />
+          <span>Leilão</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('resultado')}
-          className={`py-2.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
             activeTab === 'resultado'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <BarChart3 className="w-4 h-4" />
-          <span>Mês a Mês</span>
+          <BarChart3 className="w-4 h-4 shrink-0" />
+          <span>Fluxo</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('diagnostico')}
-          className={`py-2.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
             activeTab === 'diagnostico'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <AlertTriangle className="w-4 h-4 text-amber-400" />
-          <span>Dicas ({cenarioAtual.alertas.length})</span>
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>Dicas</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('comparador')}
-          className={`py-2.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 ${
+          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
             activeTab === 'comparador'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Layers className="w-4 h-4" />
+          <Layers className="w-4 h-4 shrink-0" />
           <span>Comparar</span>
         </button>
 
@@ -890,18 +999,18 @@ export function SimulacaoCenáriosView() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => adjustNumber('precoProjetadoArroba', -5, 180, 500)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="hidden sm:inline-flex px-3 py-2.5 min-h-11 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   - R$ 5
                 </button>
                 <button
                   type="button"
                   onClick={() => adjustNumber('precoProjetadoArroba', -1, 180, 500)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="px-3 py-2.5 min-h-11 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   - R$ 1
                 </button>
@@ -912,19 +1021,19 @@ export function SimulacaoCenáriosView() {
                   step="1"
                   value={v.precoProjetadoArroba}
                   onChange={(e) => updateVariable('precoProjetadoArroba', parseFloat(e.target.value))}
-                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                  className="flex-1 min-w-[120px] accent-emerald-500 cursor-pointer h-3 bg-slate-800 rounded-lg"
                 />
                 <button
                   type="button"
                   onClick={() => adjustNumber('precoProjetadoArroba', 1, 180, 500)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="px-3 py-2.5 min-h-11 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   + R$ 1
                 </button>
                 <button
                   type="button"
                   onClick={() => adjustNumber('precoProjetadoArroba', 5, 180, 500)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="hidden sm:inline-flex px-3 py-2.5 min-h-11 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   + R$ 5
                 </button>
@@ -949,7 +1058,7 @@ export function SimulacaoCenáriosView() {
                 <div className="text-lg font-black text-amber-300">
                   {modoCompraGado === 'arroba'
                     ? `R$ ${(v.precoCompraArrobaBoiMagro || 380).toFixed(2)}/@`
-                    : `R$ ${precoBoiMagroCalculado.toLocaleString('pt-BR')}/cab`}
+                    : `R$ ${(v.precoBoiMagro || precoBoiMagroCalculado).toLocaleString('pt-BR')}/cab`}
                 </div>
               </div>
 
@@ -957,25 +1066,42 @@ export function SimulacaoCenáriosView() {
               <div className="flex items-center gap-2 pb-1">
                 <button
                   type="button"
-                  onClick={() => setModoCompraGado('arroba')}
-                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                  onClick={() => {
+                    setModoCompraGado('arroba');
+                    const precoCab = v.precoBoiMagro || precoBoiMagroCalculado || 3800;
+                    const precoArroba = Math.round((precoCab / Math.max(0.1, arrobasEntrada)) * 100) / 100;
+                    updateVariables({
+                      precoCompraArrobaBoiMagro: precoArroba,
+                      precoBoiMagro: Math.round(arrobasEntrada * precoArroba)
+                    });
+                  }}
+                  className={`flex-1 py-2.5 min-h-11 rounded-lg text-[10px] sm:text-xs font-bold border transition-colors ${
                     modoCompraGado === 'arroba'
                       ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                       : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}
                 >
-                  Preço por @ (R$ {(v.precoCompraArrobaBoiMagro || 380).toFixed(0)}/@)
+                  <span className="sm:hidden">Por @</span>
+                  <span className="hidden sm:inline">Preço por @ (R$ {(v.precoCompraArrobaBoiMagro || 380).toFixed(0)}/@)</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setModoCompraGado('cabeca')}
-                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                  onClick={() => {
+                    setModoCompraGado('cabeca');
+                    const precoCab = v.precoBoiMagro || precoBoiMagroCalculado || 3800;
+                    updateVariables({
+                      precoBoiMagro: precoCab,
+                      precoCompraArrobaBoiMagro: 0
+                    });
+                  }}
+                  className={`flex-1 py-2.5 min-h-11 rounded-lg text-[10px] sm:text-xs font-bold border transition-colors ${
                     modoCompraGado === 'cabeca'
                       ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                       : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}
                 >
-                  Preço por Boi (R$ {precoBoiMagroCalculado.toLocaleString('pt-BR')})
+                  <span className="sm:hidden">Por boi</span>
+                  <span className="hidden sm:inline">Preço por Boi (R$ {(v.precoBoiMagro || precoBoiMagroCalculado).toLocaleString('pt-BR')})</span>
                 </button>
               </div>
 
@@ -1033,9 +1159,45 @@ export function SimulacaoCenáriosView() {
                 </div>
               )}
 
-              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
-                <span>Custo de compra por boi:</span>
-                <strong className="text-white">R$ {precoBoiMagroCalculado.toLocaleString('pt-BR')} ({arrobasEntrada} @)</strong>
+              <div className="text-[11px] text-slate-400 pt-1 space-y-1.5 border-t border-slate-800/60">
+                <div className="flex justify-between items-center">
+                  <span>Custo de compra por boi:</span>
+                  <strong className="text-white">R$ {precoBoiMagroCalculado.toLocaleString('pt-BR')}</strong>
+                </div>
+                <div className="flex justify-between items-center gap-2">
+                  <span>Arrobas na entrada:</span>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => updateArrobasEntrada(arrobasEntrada - 0.5)}
+                      className="w-11 h-11 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-sm"
+                      aria-label="Diminuir arrobas de entrada"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      min={6}
+                      max={22}
+                      step={0.5}
+                      value={arrobasEntrada}
+                      onChange={(e) => updateArrobasEntrada(parseFloat(e.target.value))}
+                      className="w-16 bg-slate-800 border border-amber-500/40 rounded-xl px-1 py-2 text-center text-amber-300 font-bold text-sm min-h-11"
+                      title="Arrobas de entrada do boi magro (1 @ = 30 kg vivo)"
+                      aria-label="Arrobas de entrada do boi magro"
+                    />
+                    <span className="text-amber-300 font-bold">@</span>
+                    <button
+                      type="button"
+                      onClick={() => updateArrobasEntrada(arrobasEntrada + 0.5)}
+                      className="w-11 h-11 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-sm"
+                      aria-label="Aumentar arrobas de entrada"
+                    >
+                      +
+                    </button>
+                    <span className="text-slate-500 text-[10px] w-full sm:w-auto text-right">({pesoEntradaEfetivo} kg)</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1053,18 +1215,18 @@ export function SimulacaoCenáriosView() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => adjustNumber('quantidadeAnimais', -50, 10, 5000)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="hidden sm:inline-flex px-3 py-2.5 min-h-11 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   -50
                 </button>
                 <button
                   type="button"
                   onClick={() => adjustNumber('quantidadeAnimais', -10, 10, 5000)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="px-3 py-2.5 min-h-11 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   -10
                 </button>
@@ -1075,19 +1237,19 @@ export function SimulacaoCenáriosView() {
                   step="10"
                   value={v.quantidadeAnimais}
                   onChange={(e) => updateVariable('quantidadeAnimais', parseInt(e.target.value, 10))}
-                  className="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                  className="flex-1 min-w-[120px] accent-emerald-500 cursor-pointer h-3 bg-slate-800 rounded-lg"
                 />
                 <button
                   type="button"
                   onClick={() => adjustNumber('quantidadeAnimais', 10, 10, 5000)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="px-3 py-2.5 min-h-11 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   +10
                 </button>
                 <button
                   type="button"
                   onClick={() => adjustNumber('quantidadeAnimais', 50, 10, 5000)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                  className="hidden sm:inline-flex px-3 py-2.5 min-h-11 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
                 >
                   +50
                 </button>
@@ -1229,10 +1391,129 @@ export function SimulacaoCenáriosView() {
                 </button>
               </div>
 
-              <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
+              <div className="text-[11px] text-slate-400 pt-1 flex flex-wrap gap-x-3 gap-y-1 border-t border-slate-800/60">
                 <span>Entrada: <strong className="text-white">{pesoEntradaEfetivo} kg</strong></span>
-                <span>Saída: <strong className="text-emerald-400">{pesoFinalCalculado} kg ({arrobasFinal} @)</strong></span>
-                <span>Ganho: <strong className="text-amber-300">+{arrobasGanhas} @</strong></span>
+                <span>Saída: <strong className="text-emerald-400">{pesoFinalCalculado} kg ({arrobasFinal} @ carcaça)</strong></span>
+                <span>Ganho carcaça: <strong className="text-amber-300">+{arrobasGanhas} @</strong></span>
+              </div>
+            </div>
+
+            {/* CONTROLE 5B: RENDIMENTO DE CARCAÇA E CUSTO */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <Scale className="w-4 h-4 text-purple-400" />
+                    Rendimento de Carcaça
+                  </h4>
+                  <p className="text-[11px] text-slate-400">% do peso vivo que vira carcaça no frigorífico</p>
+                </div>
+                <div className="text-lg font-black text-purple-300">
+                  {rendimentoPct.toFixed(1)}
+                  <span className="text-xs font-normal text-slate-400 ml-1">%</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 pb-1">
+                <button
+                  type="button"
+                  onClick={() => updateRendimentoCarcacaPct(52)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${
+                    Math.abs(rendimentoPct - 52) < 0.05
+                      ? 'bg-purple-600 text-white border-purple-500'
+                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  Pasto (52%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateRendimentoCarcacaPct(54)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${
+                    Math.abs(rendimentoPct - 54) < 0.05
+                      ? 'bg-purple-600 text-white border-purple-500'
+                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  Semi (54%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateRendimentoCarcacaPct(56)}
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${
+                    Math.abs(rendimentoPct - 56) < 0.05
+                      ? 'bg-purple-600 text-white border-purple-500'
+                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  Confinamento (56%)
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateRendimentoCarcacaPct(rendimentoPct - 0.5)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  −0,5
+                </button>
+                <input
+                  type="range"
+                  min={48}
+                  max={58}
+                  step={0.5}
+                  value={rendimentoPct}
+                  onChange={(e) => updateRendimentoCarcacaPct(parseFloat(e.target.value))}
+                  className="flex-1 accent-purple-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => updateRendimentoCarcacaPct(rendimentoPct + 0.5)}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs"
+                >
+                  +0,5
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 block">Carcaça / boi</span>
+                  <strong className="text-white text-xs">
+                    {pesoCarcacaCabeca.toFixed(1)} kg · {arrobasCarcacaCabeca.toFixed(2)} @
+                  </strong>
+                </div>
+                <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 block">Para 1 @ carcaça</span>
+                  <strong className="text-white text-xs">
+                    {kgVivoPorArroba} kg vivo
+                  </strong>
+                </div>
+                <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 block">Custo / kg carcaça</span>
+                  <strong className="text-amber-300 text-xs">
+                    R$ {(r?.custoPorKgCarcaca ?? 0).toFixed(2)}
+                  </strong>
+                </div>
+                <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
+                  <span className="text-[10px] text-slate-500 block">Custo rendimento (compra/kg)</span>
+                  <strong className="text-purple-300 text-xs">
+                    R$ {(r?.custoRendimentoPorCabeca ?? 0).toFixed(2)}/kg
+                  </strong>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-slate-400 pt-1 flex flex-wrap justify-between gap-y-1 border-t border-slate-800/60">
+                <span>
+                  Custo / @ carcaça:{' '}
+                  <strong className="text-white">R$ {(r?.custoArrobaTotalAbatida ?? 0).toFixed(2)}</strong>
+                </span>
+                <span>
+                  +1 p.p. rende ~{' '}
+                  <strong className="text-emerald-400">
+                    +R$ {(r?.impactoUmPontoRendimento ?? 0).toLocaleString('pt-BR')}
+                  </strong>
+                </span>
               </div>
             </div>
 
@@ -1293,8 +1574,10 @@ export function SimulacaoCenáriosView() {
                           onChange={(e) => {
                             const pv = parseFloat(e.target.value) || 0;
                             const pr = v.precoKgRacao || 1.58;
-                            const custoDiaCalc = Math.round(((r.pesoVivoMedio * (pv / 100)) * pr) * 100) / 100;
-                            updateVariables({ consumoRacaoPercentPV: pv, custoAnimalDia: custoDiaCalc });
+                            updateVariables({
+                              consumoRacaoPercentPV: pv,
+                              custoAnimalDia: calcCustoRacaoDia(pesoBaseAlimentacao, pv, pr)
+                            });
                           }}
                           className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold text-xs"
                         />
@@ -1315,8 +1598,10 @@ export function SimulacaoCenáriosView() {
                           onChange={(e) => {
                             const pr = parseFloat(e.target.value) || 0;
                             const pv = v.consumoRacaoPercentPV || 1.80;
-                            const custoDiaCalc = Math.round(((r.pesoVivoMedio * (pv / 100)) * pr) * 100) / 100;
-                            updateVariables({ precoKgRacao: pr, custoAnimalDia: custoDiaCalc });
+                            updateVariables({
+                              precoKgRacao: pr,
+                              custoAnimalDia: calcCustoRacaoDia(pesoBaseAlimentacao, pv, pr)
+                            });
                           }}
                           className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold text-xs"
                         />
@@ -1324,9 +1609,82 @@ export function SimulacaoCenáriosView() {
                     </div>
                   </div>
 
+                  <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-400">Peso base do trato (média de alimentação):</span>
+                      <span className="text-[10px] text-slate-500">
+                        {(v.consumoRacaoPercentPV || 1.80).toFixed(1)}% de {pesoBaseAlimentacao} kg
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => updatePesoBaseAlimentacao(pesoBaseAlimentacao - 10)}
+                        className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-xs"
+                        aria-label="Diminuir peso base da alimentação"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={150}
+                        max={800}
+                        step={10}
+                        value={pesoBaseAlimentacao}
+                        onChange={(e) => updatePesoBaseAlimentacao(parseFloat(e.target.value))}
+                        className="w-20 bg-slate-900 border border-emerald-500/40 rounded-lg px-2 py-1 text-center text-emerald-300 font-bold text-xs"
+                        aria-label="Peso base para cálculo da ração"
+                      />
+                      <span className="text-xs text-slate-400 font-bold">kg</span>
+                      <button
+                        type="button"
+                        onClick={() => updatePesoBaseAlimentacao(pesoBaseAlimentacao + 10)}
+                        className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-xs"
+                        aria-label="Aumentar peso base da alimentação"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => updatePesoBaseAlimentacao(pesoEntradaEfetivo)}
+                        className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${
+                          !usandoMediaLote && pesoBaseAlimentacao === pesoEntradaEfetivo
+                            ? 'bg-emerald-600 text-white border-emerald-500'
+                            : 'bg-slate-800 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        Entrada ({pesoEntradaEfetivo} kg)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={usarMediaPesoAlimentacao}
+                        className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${
+                          usandoMediaLote
+                            ? 'bg-emerald-600 text-white border-emerald-500'
+                            : 'bg-slate-800 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        Média ({pesoMedioLote} kg)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updatePesoBaseAlimentacao(pesoFinalCalculado)}
+                        className={`flex-1 py-1 rounded-lg text-[10px] font-bold border ${
+                          !usandoMediaLote && pesoBaseAlimentacao === pesoFinalCalculado
+                            ? 'bg-emerald-600 text-white border-emerald-500'
+                            : 'bg-slate-800 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        Saída ({pesoFinalCalculado} kg)
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
-                    <span>Trato: <strong className="text-emerald-400">{consumoKgRacaoDia} kg de ração/dia</strong></span>
-                    <span>Total Trato: <strong className="text-white">R$ {r.custoAlimentacao.toLocaleString('pt-BR')}</strong></span>
+                    <span>Trato: <strong className="text-emerald-400">{Number.isFinite(consumoKgRacaoDia) ? consumoKgRacaoDia.toFixed(2) : '0.00'} kg de ração/dia</strong></span>
+                    <span>Total Trato: <strong className="text-white">R$ {(r?.custoAlimentacao ?? 0).toLocaleString('pt-BR')}</strong></span>
                   </div>
                 </div>
               ) : (
@@ -1525,9 +1883,20 @@ export function SimulacaoCenáriosView() {
         </div>
       )}
 
+      {/* ABA RESUMO: GASTO, GANHO E COMPARATIVOS DE RENDA FIXA */}
+      {activeTab === 'resumo' && (
+        <ResumoFinanceiroView resultados={r} variaveis={v} />
+      )}
+
+      {activeTab === 'leilao' && (
+        <LeilaoMaximoView resultados={r} variaveis={v} />
+      )}
+
       {/* ABA 2: RESULTADOS MÊS A MÊS (FLUXO DE CAIXA DIDÁTICO) */}
       {activeTab === 'resultado' && (
         <div className="space-y-4 animate-fadeIn">
+
+          <GastosPorDiaPanel resultados={r} variaveis={v} variante="completo" />
           
           {/* FECHAMENTO DA CONTA DO BOI (DRE DIDÁTICA DO PRODUTOR) */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
@@ -1575,13 +1944,25 @@ export function SimulacaoCenáriosView() {
                     <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round(((r.custoSanitario + r.custoSeguro + r.custoPastagem) / r.custoTotal) * 100) : 0}%</td>
                   </tr>
                   <tr>
-                    <td className="p-3 text-slate-300 font-medium">5. Imposto Senar (1.63%) & Fretes de Venda</td>
-                    <td className="p-3 text-right font-bold text-slate-200">R$ {(r.custoImpostosVenda + (r.animaisAbatidos * (v.freteVendaCabeca || 0))).toLocaleString('pt-BR')}</td>
-                    <td className="p-3 text-right text-slate-300">R$ {Math.round((r.custoImpostosVenda + (r.animaisAbatidos * (v.freteVendaCabeca || 0))) / Math.max(1, r.animaisAbatidos)).toLocaleString('pt-BR')}</td>
-                    <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round(((r.custoImpostosVenda + (r.animaisAbatidos * (v.freteVendaCabeca || 0))) / r.custoTotal) * 100) : 0}%</td>
+                    <td className="p-3 text-slate-300 font-medium">5. Descontos na venda (Senar, frete e comissão)</td>
+                    <td className="p-3 text-right font-bold text-slate-200">
+                      R$ {(
+                        (r.custoImpostosVenda || 0) +
+                        (r.animaisAbatidos * (v.freteVendaCabeca || 0)) +
+                        Math.round((r.receitaBruta || 0) * ((v.comissaoVendaPercent || 0) / 100))
+                      ).toLocaleString('pt-BR')}
+                    </td>
+                    <td className="p-3 text-right text-slate-300">
+                      R$ {Math.round((
+                        (r.custoImpostosVenda || 0) +
+                        (r.animaisAbatidos * (v.freteVendaCabeca || 0)) +
+                        Math.round((r.receitaBruta || 0) * ((v.comissaoVendaPercent || 0) / 100))
+                      ) / Math.max(1, r.animaisAbatidos)).toLocaleString('pt-BR')}
+                    </td>
+                    <td className="p-3 text-right text-slate-500 text-[10px]">já na receita líq.</td>
                   </tr>
                   <tr className="bg-slate-950 font-bold border-t border-slate-700">
-                    <td className="p-3 text-red-300">CUSTO TOTAL DESEMBOLSADO</td>
+                    <td className="p-3 text-red-300">CUSTO TOTAL (compra + engorda)</td>
                     <td className="p-3 text-right text-red-400 text-sm">R$ {r.custoTotal.toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-red-400">R$ {r.custoPorCabeca.toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-400">100%</td>
@@ -1629,10 +2010,10 @@ export function SimulacaoCenáriosView() {
             {/* Gráfico de Barras */}
             <div className="h-60 sm:h-72 w-full pt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={r.fluxoCaixa} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={r.fluxoCaixa} margin={{ top: 10, right: 8, left: 4, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis dataKey="mes" stroke="#64748b" fontSize={11} />
-                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `R$${(val / 1000).toFixed(0)}k`} />
+                  <YAxis stroke="#64748b" fontSize={10} width={40} tickFormatter={(val) => `R$${(val / 1000).toFixed(0)}k`} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
                     formatter={(val: any) => [`R$ ${Number(val).toLocaleString('pt-BR')}`, '']}

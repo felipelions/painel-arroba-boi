@@ -47,6 +47,15 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
   const [speechSupported, setSpeechSupported] = useState(true);
   const [interimText, setInterimText] = useState('');
   const recognitionRef = useRef<any>(null);
+  const basePromptRef = useRef(''); // texto que já existia antes de começar a falar
+  const promptRef = useRef(''); // espelho do prompt para reinícios no celular
+  const wantListeningRef = useRef(false); // evita restart acidental / handlers órfãos
+  const processedFinalsRef = useRef(0); // quantos resultados finais já foram aplicados nesta sessão
+  const lastFinalTextRef = useRef(''); // evita reaplicar o mesmo final (bug Chrome Android)
+
+  useEffect(() => {
+    promptRef.current = prompt;
+  }, [prompt]);
 
   // Verifica suporte ao Web Speech API ao montar
   useEffect(() => {
@@ -71,7 +80,7 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
 
   // Função para Iniciar / Parar gravação de voz
   function toggleListening() {
-    if (isListening) {
+    if (isListening || wantListeningRef.current) {
       stopListening();
     } else {
       startListening();
@@ -90,52 +99,102 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
       return;
     }
 
+    // Garante uma única instância (toque duplo / reinício no celular)
+    stopListening();
+
     try {
       setError(null);
+      basePromptRef.current = promptRef.current.trim();
+      processedFinalsRef.current = 0;
+      lastFinalTextRef.current = '';
+      wantListeningRef.current = true;
+
       const recognition = new SpeechRecognitionClass();
       recognition.lang = 'pt-BR';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
-      let basePrompt = prompt;
+      // No celular: continuous=false + só finais evita o Chrome Android duplicar a frase
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      recognition.continuous = !isMobile;
+      recognition.interimResults = !isMobile;
+      recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
+        if (!wantListeningRef.current) return;
         setIsListening(true);
         setInterimText('');
       };
 
       recognition.onresult = (event: any) => {
-        let currentInterim = '';
-        let finalChunk = '';
+        if (!wantListeningRef.current) return;
 
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcriptSegment = event.results[i][0].transcript;
+        // Sessão nova (após restart no mobile): array de results reinicia
+        if (event.results.length < processedFinalsRef.current) {
+          processedFinalsRef.current = 0;
+          lastFinalTextRef.current = '';
+        }
+
+        let interim = '';
+        let appended = false;
+
+        for (let i = 0; i < event.results.length; i++) {
+          const transcriptSegment = (event.results[i][0]?.transcript || '').trim();
+          if (!transcriptSegment) continue;
+
           if (event.results[i].isFinal) {
-            finalChunk += transcriptSegment + ' ';
-          } else {
-            currentInterim += transcriptSegment;
+            // Só aplica finais ainda não processados; ignora o mesmo texto em sequência
+            if (i < processedFinalsRef.current) continue;
+            processedFinalsRef.current = i + 1;
+
+            const normalized = transcriptSegment.replace(/\s+/g, ' ');
+            if (normalized === lastFinalTextRef.current) continue;
+            lastFinalTextRef.current = normalized;
+
+            const base = basePromptRef.current;
+            const next = [base, normalized].filter(Boolean).join(' ');
+            basePromptRef.current = next;
+            promptRef.current = next;
+            setPrompt(next);
+            appended = true;
+          } else if (!isMobile) {
+            interim += transcriptSegment + ' ';
           }
         }
 
-        if (finalChunk) {
-          basePrompt = basePrompt ? `${basePrompt.trim()} ${finalChunk.trim()}` : finalChunk.trim();
-          setPrompt(basePrompt);
+        if (!appended) {
+          setInterimText(interim.trim());
+        } else {
+          setInterimText('');
         }
-
-        setInterimText(currentInterim);
       };
 
       recognition.onerror = (event: any) => {
         console.warn('Erro na transcrição de voz:', event.error);
         if (event.error === 'not-allowed') {
           setError('Acesso ao microfone foi negado no navegador. Habilite a permissão para falar.');
+          wantListeningRef.current = false;
+        } else if (event.error === 'aborted') {
+          // ignorar — comum ao parar manualmente
         } else if (event.error !== 'no-speech') {
           setError(`Erro no microfone: ${event.error}`);
         }
-        setIsListening(false);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          setIsListening(false);
+        }
       };
 
       recognition.onend = () => {
+        // No mobile (continuous=false), reinicia se o usuário ainda quer falar
+        if (wantListeningRef.current && recognitionRef.current === recognition) {
+          basePromptRef.current = promptRef.current.trim();
+          processedFinalsRef.current = 0;
+          lastFinalTextRef.current = '';
+          setInterimText('');
+          try {
+            recognition.start();
+            return;
+          } catch {
+            // se falhar o restart, encerra
+          }
+        }
         setIsListening(false);
         setInterimText('');
       };
@@ -145,18 +204,27 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
     } catch (err: any) {
       console.error('Falha ao iniciar reconhecimento de voz:', err);
       setError('Não foi possível iniciar o microfone.');
+      wantListeningRef.current = false;
       setIsListening(false);
     }
   }
 
   function stopListening() {
+    wantListeningRef.current = false;
+    processedFinalsRef.current = 0;
+    lastFinalTextRef.current = '';
     if (recognitionRef.current) {
+      const rec = recognitionRef.current;
+      recognitionRef.current = null;
       try {
-        recognitionRef.current.stop();
+        rec.onresult = null;
+        rec.onend = null;
+        rec.onerror = null;
+        rec.onstart = null;
+        rec.stop();
       } catch {
         // ignora
       }
-      recognitionRef.current = null;
     }
     setIsListening(false);
     setInterimText('');
@@ -347,8 +415,11 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
               id="prompt-ia"
               rows={4}
               disabled={loading}
-              value={prompt + (interimText ? ` ${interimText}` : '')}
+              readOnly={isListening}
+              value={prompt}
               onChange={(e) => {
+                // Enquanto ouve, não grava o texto interino no prompt (causa duplicação no celular)
+                if (isListening) return;
                 setPrompt(e.target.value);
                 if (error) setError(null);
               }}
@@ -359,6 +430,11 @@ export function ModalPreencherIA({ isOpen, onClose, onSuccess }: ModalPreencherI
                   : 'border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50'
               }`}
             />
+            {isListening && interimText ? (
+              <p className="text-[11px] text-red-300/90 italic px-0.5">
+                Ouvindo: “{interimText}”
+              </p>
+            ) : null}
           </div>
 
           {/* Progress Bar em tempo real */}

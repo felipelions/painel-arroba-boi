@@ -32,6 +32,66 @@ const DEFAULT_FILTROS: Filtros = {
   praca: 'Todas'
 };
 
+function mergeCotacoes(base: CotacaoData[], atualizacoes: CotacaoData[]): CotacaoData[] {
+  if (!atualizacoes.length) return base;
+  const mapa = new Map<string, CotacaoData>();
+  for (const item of base) {
+    mapa.set(`${item.data}|${item.fonte}|${item.praca}|${item.tipo}`, item);
+  }
+  for (const item of atualizacoes) {
+    // Substitui cotação do mesmo dia/praça/tipo (qualquer fonte) e adiciona o indicador novo
+    for (const key of [...mapa.keys()]) {
+      if (
+        key.startsWith(`${item.data}|`) &&
+        key.endsWith(`|${item.praca}|${item.tipo}`)
+      ) {
+        mapa.delete(key);
+      }
+    }
+    mapa.set(`${item.data}|${item.fonte}|${item.praca}|${item.tipo}`, item);
+  }
+  return Array.from(mapa.values()).sort((a, b) => a.data.localeCompare(b.data));
+}
+
+/** Anexa séries extras (ex.: boi magro) sem apagar boi gordo no mesmo dia. */
+function appendCotacoes(base: CotacaoData[], extras: CotacaoData[]): CotacaoData[] {
+  if (!extras.length) return base;
+  const mapa = new Map<string, CotacaoData>();
+  for (const item of base) {
+    mapa.set(`${item.data}|${item.fonte}|${item.praca}|${item.tipo}`, item);
+  }
+  for (const item of extras) {
+    mapa.set(`${item.data}|${item.fonte}|${item.praca}|${item.tipo}`, item);
+  }
+  return Array.from(mapa.values()).sort((a, b) => a.data.localeCompare(b.data));
+}
+
+interface BoiMagroRegistro {
+  data: string;
+  valor_arroba_brl: number;
+  tipo?: string;
+  uf?: string;
+  fonte?: string;
+}
+
+/** Converte série Scot (Nelore 375kg / 12,5@) para CotacaoData — referência do gráfico. */
+function cotacoesFromBoiMagroScot(payload: {
+  series?: { scot_spot_nelore_375kg?: { registros?: BoiMagroRegistro[] } };
+}): CotacaoData[] {
+  const registros = payload?.series?.scot_spot_nelore_375kg?.registros;
+  if (!Array.isArray(registros)) return [];
+  return registros
+    .filter(r => r?.data && typeof r.valor_arroba_brl === 'number' && r.valor_arroba_brl > 0)
+    .map(r => ({
+      data: r.data,
+      valor: Math.round(r.valor_arroba_brl * 100) / 100,
+      fonte: r.fonte || 'Scot Consultoria',
+      tipo: 'Boi Magro',
+      uf: r.uf || 'SP',
+      praca: 'São Paulo'
+    }));
+}
+
 export function useMarketData(): UseMarketDataReturn {
   const [data, setData] = useState<CotacaoData[]>([]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -82,6 +142,33 @@ export function useMarketData(): UseMarketDataReturn {
         throw new Error('Não foi possível carregar os dados de cotações.');
       }
 
+      // 3. Mescla indicadores recentes do @ boi gordo SP (após último snapshot)
+      try {
+        const updRes = await fetch('/data/indicador-boi-gordo-sp-atualizacao.json');
+        if (updRes.ok) {
+          const atualizacoes: CotacaoData[] = await updRes.json();
+          if (Array.isArray(atualizacoes) && atualizacoes.length > 0) {
+            historicoData = mergeCotacoes(historicoData, atualizacoes);
+          }
+        }
+      } catch {
+        // mantém histórico base
+      }
+
+      // 4. Anexa @ boi magro SP (snapshots Scot Nelore 375kg / 12,5@)
+      try {
+        const magroRes = await fetch('/data/boi-magro-sp-2026.json');
+        if (magroRes.ok) {
+          const magroPayload = await magroRes.json();
+          const magroCotacoes = cotacoesFromBoiMagroScot(magroPayload);
+          if (magroCotacoes.length > 0) {
+            historicoData = appendCotacoes(historicoData, magroCotacoes);
+          }
+        }
+      } catch {
+        // mantém histórico sem magro
+      }
+
       setProgress(60);
       setProgressText('Carregando estatísticas do mercado...');
 
@@ -96,21 +183,24 @@ export function useMarketData(): UseMarketDataReturn {
         // ignora
       }
 
-      if (!snapshotData) {
-        // Fallback: computa estatísticas a partir dos dados carregados
+      // Recalcula snapshot com os dados mesclados (inclui indicadores novos)
+      {
         const validValues = historicoData.map(d => d.valor).filter(v => typeof v === 'number' && v > 0);
+        const fontesCount = {
+          CEPEA: historicoData.filter(d => d.fonte === 'CEPEA').length,
+          CotacaoDoDia: historicoData.filter(d => d.fonte === 'CotacaoDoDia').length
+        };
         snapshotData = {
           geradoEm: new Date().toISOString(),
           totalRegistros: historicoData.length,
-          fontes: {
-            CEPEA: historicoData.filter(d => d.fonte === 'CEPEA').length,
-            CotacaoDoDia: historicoData.filter(d => d.fonte === 'CotacaoDoDia').length
-          },
-          periodoInicio: historicoData[0]?.data || '',
-          periodoFim: historicoData[historicoData.length - 1]?.data || '',
-          valorMinimo: validValues.length > 0 ? Math.min(...validValues) : 0,
-          valorMaximo: validValues.length > 0 ? Math.max(...validValues) : 0,
-          valorMedio: validValues.length > 0 ? validValues.reduce((s, v) => s + v, 0) / validValues.length : 0
+          fontes: fontesCount,
+          periodoInicio: historicoData[0]?.data || snapshotData?.periodoInicio || '',
+          periodoFim: historicoData[historicoData.length - 1]?.data || snapshotData?.periodoFim || '',
+          valorMinimo: validValues.length > 0 ? Math.min(...validValues) : (snapshotData?.valorMinimo || 0),
+          valorMaximo: validValues.length > 0 ? Math.max(...validValues) : (snapshotData?.valorMaximo || 0),
+          valorMedio: validValues.length > 0
+            ? validValues.reduce((s, v) => s + v, 0) / validValues.length
+            : (snapshotData?.valorMedio || 0)
         };
       }
 

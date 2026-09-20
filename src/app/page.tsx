@@ -34,21 +34,27 @@ export default function HomePage() {
     options
   } = useMarketData();
 
-  const latestValue = filteredData[filteredData.length - 1]?.valor || 0;
-  const previousValue = filteredData[filteredData.length - 2]?.valor || 0;
+  // KPIs usam boi gordo por padrão; magro só entra se o filtro Tipo for "Boi Magro"
+  const kpiData =
+    filtros.tipo && filtros.tipo !== 'Todos'
+      ? filteredData
+      : filteredData.filter(d => !/magro/i.test(d.tipo || ''));
+
+  const latestValue = kpiData[kpiData.length - 1]?.valor || 0;
+  const previousValue = kpiData[kpiData.length - 2]?.valor || 0;
   const change = latestValue - previousValue;
   const changePercent = previousValue > 0 ? (change / previousValue) * 100 : 0;
 
-  const avgValue = filteredData.length > 0
-    ? filteredData.reduce((sum, d) => sum + d.valor, 0) / filteredData.length
+  const avgValue = kpiData.length > 0
+    ? kpiData.reduce((sum, d) => sum + d.valor, 0) / kpiData.length
     : 0;
 
-  const minValue = filteredData.length > 0
-    ? Math.min(...filteredData.map(d => d.valor))
+  const minValue = kpiData.length > 0
+    ? Math.min(...kpiData.map(d => d.valor))
     : 0;
 
-  const maxValue = filteredData.length > 0
-    ? Math.max(...filteredData.map(d => d.valor))
+  const maxValue = kpiData.length > 0
+    ? Math.max(...kpiData.map(d => d.valor))
     : 0;
 
   if (!mounted) {
@@ -234,27 +240,27 @@ export default function HomePage() {
       </footer>
 
       {/* Barra de Navegação Inferior Fixa no Mobile (100% Mobile-First Ergonomia) */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/90 flex items-center justify-around py-1.5 px-3 shadow-2xl">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/90 flex items-stretch shadow-2xl safe-area-pb">
         <button
           type="button"
           onClick={() => setActiveTab('simulacoes')}
-          className={`flex flex-col items-center justify-center gap-1 py-1.5 px-5 rounded-2xl transition-all ${
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 min-h-[56px] transition-all ${
             activeTab === 'simulacoes'
-              ? 'bg-emerald-600/20 text-emerald-400 font-black border border-emerald-500/30 shadow-md'
-              : 'text-slate-400 font-medium hover:text-slate-200'
+              ? 'bg-emerald-600/20 text-emerald-400 font-black border-t-2 border-emerald-500'
+              : 'text-slate-400 font-medium'
           }`}
         >
           <Sparkles className={`w-5 h-5 ${activeTab === 'simulacoes' ? 'animate-pulse text-emerald-400' : ''}`} />
-          <span className="text-[10px] tracking-tight">Simulações IA</span>
+          <span className="text-[10px] tracking-tight">Simulações</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('mercado')}
-          className={`flex flex-col items-center justify-center gap-1 py-1.5 px-5 rounded-2xl transition-all ${
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 min-h-[56px] transition-all ${
             activeTab === 'mercado'
-              ? 'bg-emerald-600/20 text-emerald-400 font-black border border-emerald-500/30 shadow-md'
-              : 'text-slate-400 font-medium hover:text-slate-200'
+              ? 'bg-emerald-600/20 text-emerald-400 font-black border-t-2 border-emerald-500'
+              : 'text-slate-400 font-medium'
           }`}
         >
           <BarChart2 className="w-5 h-5" />

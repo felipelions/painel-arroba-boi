@@ -75,6 +75,7 @@ Retorne SEMPRE e EXCLUSIVAMENTE um objeto JSON válido contendo exatamente esta 
     "custoAnimalDia": 9.50,
     "consumoRacaoPercentPV": 1.80,
     "precoKgRacao": 1.58,
+    "pesoBaseAlimentacao": 450,
     "arrendamentoMensal": 0,
     "maoDeObraMensal": 1500,
     "custoSeguroCabeca": 5.0,
@@ -91,7 +92,8 @@ Retorne SEMPRE e EXCLUSIVAMENTE um objeto JSON válido contendo exatamente esta 
 IMPORTANTE:
 - Converta valores numéricos para number (nunca strings).
 - Se o usuário mencionar consumo de ração em % do PV (peso vivo) ou preço/kg de ração, preencha 'consumoRacaoPercentPV' e 'precoKgRacao'.
-- Se o usuário citar preço de compra do boi magro por arroba (ex: 380/@), preencha 'precoCompraArrobaBoiMagro'.
+- Se citar peso base, peso médio do lote ou peso de referência para o trato, preencha 'pesoBaseAlimentacao' em kg.
+- Se o usuário citar rendimento de carcaça (ex: 54%, 56% de rendimento), preencha 'rendimentoCarcaca' como decimal (0.54).
 - Se citar arrendamento (aluguel de pasto) ou mão de obra mensal, preencha 'arrendamentoMensal' e 'maoDeObraMensal'.
 - Para valores ausentes no texto do usuário, aplique os melhores padrões agronômicos coerentes com a estratégia descrita (confinamento, pasto, recria, etc.).`;
 

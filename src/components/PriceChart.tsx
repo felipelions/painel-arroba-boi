@@ -6,6 +6,22 @@ interface PriceChartProps {
   loading?: boolean;
 }
 
+type ChartPoint = {
+  rawDate: string;
+  data: string;
+  boiGordo?: number;
+  boiMagro?: number;
+};
+
+function isBoiMagro(tipo: string | undefined): boolean {
+  return !!tipo && /magro/i.test(tipo);
+}
+
+function avg(vals: number[]): number | undefined {
+  if (!vals.length) return undefined;
+  return vals.reduce((s, v) => s + v, 0) / vals.length;
+}
+
 export function PriceChart({ data, loading }: PriceChartProps) {
   if (loading) {
     return (
@@ -16,66 +32,91 @@ export function PriceChart({ data, loading }: PriceChartProps) {
     );
   }
 
-  // Agrupar por data e calcular média
-  const aggregatedData = data.reduce((acc, item) => {
-    const existing = acc.find(d => d.data === item.data);
-    if (existing) {
-      existing.valores.push(item.valor);
-    } else {
-      acc.push({ data: item.data, valores: [item.valor] });
+  // Agrupa por data, separando boi gordo e boi magro (não misturar médias)
+  const byDate = new Map<string, { gordo: number[]; magro: number[] }>();
+  for (const item of data) {
+    if (typeof item.valor !== 'number' || item.valor <= 0) continue;
+    let bucket = byDate.get(item.data);
+    if (!bucket) {
+      bucket = { gordo: [], magro: [] };
+      byDate.set(item.data, bucket);
     }
-    return acc;
-  }, [] as { data: string; valores: number[] }[]);
+    if (isBoiMagro(item.tipo)) {
+      bucket.magro.push(item.valor);
+    } else {
+      bucket.gordo.push(item.valor);
+    }
+  }
 
-  const series = aggregatedData.map(item => ({
-    rawDate: item.data,
-    data: formatDate(item.data, aggregatedData.length > 400),
-    valor: item.valores.reduce((sum, v) => sum + v, 0) / item.valores.length
-  }));
+  const sortedDates = [...byDate.keys()].sort();
+  const series: ChartPoint[] = sortedDates.map(date => {
+    const bucket = byDate.get(date)!;
+    return {
+      rawDate: date,
+      data: formatDate(date, sortedDates.length > 400),
+      boiGordo: avg(bucket.gordo),
+      boiMagro: avg(bucket.magro)
+    };
+  });
 
-  // Downsample semanal se houver muitos pontos
+  const hasGordo = series.some(p => p.boiGordo != null);
+  const hasMagro = series.some(p => p.boiMagro != null);
+
+  // Downsample semanal se houver muitos pontos (preserva as duas séries)
   let chartData = series;
   let downsampled = false;
   if (series.length > 800) {
     downsampled = true;
-    const byWeek = new Map<string, number[]>();
+    const byWeek = new Map<string, { gordo: number[]; magro: number[] }>();
     for (const pt of series) {
       const d = new Date(pt.rawDate + 'T12:00:00');
-      const week = `${d.getUTCFullYear()}-W${String(Math.ceil((((d.getTime() - Date.UTC(d.getUTCFullYear(),0,1)) / 86400000) + 1) / 7)).padStart(2,'0')}`;
-      if (!byWeek.has(week)) byWeek.set(week, []);
-      byWeek.get(week)!.push(pt.valor);
+      const week = `${d.getUTCFullYear()}-W${String(
+        Math.ceil((((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000) + 1) / 7)
+      ).padStart(2, '0')}`;
+      if (!byWeek.has(week)) byWeek.set(week, { gordo: [], magro: [] });
+      const w = byWeek.get(week)!;
+      if (pt.boiGordo != null) w.gordo.push(pt.boiGordo);
+      if (pt.boiMagro != null) w.magro.push(pt.boiMagro);
     }
     chartData = [...byWeek.entries()].map(([week, vals]) => ({
       rawDate: week,
       data: week,
-      valor: vals.reduce((a,b)=>a+b,0) / vals.length
+      boiGordo: avg(vals.gordo),
+      boiMagro: avg(vals.magro)
     }));
   }
 
   return (
     <div className="bg-slate-900/90 rounded-3xl p-4 sm:p-6 border border-slate-800 shadow-xl space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
           📈 Histórico de Preços da Arroba
         </h3>
-        {downsampled && (
-          <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
-            Média semanal
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {hasMagro && (
+            <span className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+              + Boi Magro (Scot)
+            </span>
+          )}
+          {downsampled && (
+            <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+              Média semanal
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="w-full h-56 sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis 
-              dataKey="data" 
+            <XAxis
+              dataKey="data"
               stroke="#64748b"
               tick={{ fill: '#64748b', fontSize: 10 }}
               tickLine={{ stroke: '#1e293b' }}
             />
-            <YAxis 
+            <YAxis
               stroke="#64748b"
               tick={{ fill: '#64748b', fontSize: 10 }}
               tickLine={{ stroke: '#1e293b' }}
@@ -89,26 +130,51 @@ export function PriceChart({ data, loading }: PriceChartProps) {
                 color: '#fff',
                 fontSize: '12px'
               }}
-              formatter={(value: number) => [`R$ ${(Number(value) || 0).toFixed(2)}`, 'Valor']}
+              formatter={(value: number, name: string) => [
+                `R$ ${(Number(value) || 0).toFixed(2)}`,
+                name
+              ]}
               labelStyle={{ color: '#94a3b8' }}
             />
-            <Legend 
+            <Legend
               wrapperStyle={{ color: '#94a3b8', fontSize: '11px' }}
               iconType="line"
             />
-            <Line 
-              type="monotone" 
-              dataKey="valor" 
-              stroke="#10b981" 
-              strokeWidth={2.5}
-              dot={false}
-              name="Cotação (@)"
-              activeDot={{ r: 5, fill: '#10b981' }}
-            />
+            {hasGordo && (
+              <Line
+                type="monotone"
+                dataKey="boiGordo"
+                stroke="#10b981"
+                strokeWidth={2.5}
+                dot={false}
+                name="Boi Gordo (@)"
+                connectNulls
+                activeDot={{ r: 5, fill: '#10b981' }}
+              />
+            )}
+            {hasMagro && (
+              <Line
+                type="monotone"
+                dataKey="boiMagro"
+                stroke="#f59e0b"
+                strokeWidth={2.5}
+                strokeDasharray="6 4"
+                dot={{ r: 3, fill: '#f59e0b', strokeWidth: 0 }}
+                name="Boi Magro (@)"
+                connectNulls
+                activeDot={{ r: 5, fill: '#f59e0b' }}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
-      
+
+      {hasMagro && (
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          Boi Magro: snapshots Scot Consultoria (Nelore ~375 kg / 12,5@), R$/@ = R$/cabeça ÷ 12,5. Série não diária.
+        </p>
+      )}
+
       {data.length === 0 && (
         <div className="text-center py-6 text-slate-400 text-xs">
           Nenhum dado disponível para o período selecionado
