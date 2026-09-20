@@ -37,7 +37,9 @@ rebanho_vivo            = max(0, quantidade − mortalidade_cabeças)
 
 peso_entrada            = pesoMedioEntrada > 0 ? pesoMedioEntrada : pesoMedioAtual
 ganho_peso_total        = GMD × dias_permanência
-peso_final              = round(peso_entrada + ganho_peso_total)   ← sempre dinâmico (entrada + GMD × dias)
+peso_final_sugerido     = round(peso_entrada + ganho_peso_total)
+peso_final              = pesoMedioSaida > 0 ? pesoMedioSaida : peso_final_sugerido
+                        ← editável; auto-preenche quando mudam entrada, GMD ou dias
 peso_vivo_médio         = round((peso_entrada + peso_final) / 2)
 peso_vivo_final_total   = animais_abatidos × peso_final
 ```
@@ -67,29 +69,26 @@ dias_para_1_@           = 15 / ganho_carcaça_dia
 
 ---
 
-## 3. Alimentação
+## 3. Alimentação (acumulativo dia a dia)
 
-**Opção A — diária direta (R$/animal/dia):**
-
-```
-custo_animal_dia_efetivo = custoAnimalDia
-```
-
-**Opção B — % do peso vivo × preço do kg de ração** (quando preenchidos):
+Para cada dia `d` de `0` até `dias−1`:
 
 ```
-peso_para_ração         = pesoBaseAlimentação > 0 ? pesoBaseAlimentação : peso_vivo_médio
-consumo_diario_kg       = peso_para_ração × (consumoRacaoPercentPV / 100)
-custo_animal_dia_efetivo = consumo_diario_kg × precoKgRacao
+peso_dia            = peso_entrada + GMD × d
+consumo_kg/dia      = peso_dia × (%PV / 100)     ← modo planilha
+ração_R$/cab/dia    = consumo_kg × preço_R$/kg
+                      ou custoAnimalDia (modo direto)
+custo_alimentação  += quantidade × ração_R$/cab/dia
 ```
 
-**Total do período:**
+**Rendimento diário de carcaça** (acompanhamento):
 
 ```
-custo_alimentação = quantidade × custo_animal_dia_efetivo × dias_permanência
+kg_carcaça/dia = GMD × rendimento
+@ / dia        = kg_carcaça/dia ÷ 15
 ```
 
-> A diária usa a **quantidade comprada** (não só os abatidos), porque o lote come enquanto estiver no trato — a mortalidade já reduz a receita, não o custo alimentar base.
+O painel `RacaoAcumuladaPanel` mostra peso, ração e @ acumulados dia a dia.
 
 ---
 

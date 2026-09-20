@@ -12,8 +12,11 @@ import { StorageService } from '../../services/StorageService';
 import { ModalPreencherIA } from './ModalPreencherIA';
 import { ComparadorCenários } from './ComparadorCenários';
 import { GastosPorDiaPanel } from './GastosPorDiaPanel';
+import { RacaoAcumuladaPanel } from './RacaoAcumuladaPanel';
 import { ResumoFinanceiroView } from './ResumoFinanceiroView';
 import { LeilaoMaximoView } from './LeilaoMaximoView';
+import { DetalheCustosView } from './DetalheCustosView';
+import { NumberField } from '../NumberField';
 import {
   Sparkles,
   Mic,
@@ -49,7 +52,8 @@ import {
   Clock,
   ArrowRight,
   Landmark,
-  Gavel
+  Gavel,
+  Receipt
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -162,7 +166,7 @@ export function SimulacaoCenáriosView() {
   const [loading, setLoading] = useState(true);
   
   // Abas didáticas simplificadas
-  const [activeTab, setActiveTab] = useState<'simulador' | 'resumo' | 'leilao' | 'resultado' | 'diagnostico' | 'comparador'>('simulador');
+  const [activeTab, setActiveTab] = useState<'simulador' | 'resumo' | 'leilao' | 'custos' | 'resultado' | 'diagnostico' | 'comparador'>('simulador');
   
   // Modos de entrada
   const [modoCompraGado, setModoCompraGado] = useState<'arroba' | 'cabeca'>('arroba');
@@ -243,14 +247,37 @@ export function SimulacaoCenáriosView() {
       ...partial
     };
 
-    // Saída sempre dinâmica: acompanha entrada + GMD × dias
     const pesoEntrada =
       novasVariaveis.pesoMedioEntrada > 0
         ? novasVariaveis.pesoMedioEntrada
         : novasVariaveis.pesoMedioAtual;
-    novasVariaveis.pesoMedioSaida = Math.round(
-      pesoEntrada + (novasVariaveis.gmd || 0) * (novasVariaveis.diasPermanencia || 0)
-    );
+    const gmdVal = novasVariaveis.gmd || 0;
+    const diasVal = novasVariaveis.diasPermanencia || 0;
+    const saidaSugerida = Math.round(pesoEntrada + gmdVal * diasVal);
+
+    // Auto-preenche saída quando muda entrada / GMD / dias (não sobrescreve edição manual da saída)
+    const driversPeso = ['pesoMedioEntrada', 'pesoMedioAtual', 'gmd', 'diasPermanencia'] as const;
+    const mudouDriver = driversPeso.some((k) => k in partial);
+    if (mudouDriver && !('pesoMedioSaida' in partial)) {
+      novasVariaveis.pesoMedioSaida = saidaSugerida;
+    } else if (!(novasVariaveis.pesoMedioSaida > 0)) {
+      novasVariaveis.pesoMedioSaida = saidaSugerida;
+    }
+
+    const pesoSaida =
+      novasVariaveis.pesoMedioSaida > 0 ? novasVariaveis.pesoMedioSaida : saidaSugerida;
+    const pesoMedioLoteCalc = Math.round((pesoEntrada + pesoSaida) / 2);
+
+    // Peso base do trato: se estiver no modo média (0), atualiza a diária com a nova média
+    const usandoMedia =
+      !(novasVariaveis.pesoBaseAlimentacao && novasVariaveis.pesoBaseAlimentacao > 0);
+    if (mudouDriver && usandoMedia) {
+      novasVariaveis.custoAnimalDia = calcCustoRacaoDia(
+        pesoMedioLoteCalc,
+        novasVariaveis.consumoRacaoPercentPV || 1.80,
+        novasVariaveis.precoKgRacao || 1.58
+      );
+    }
 
     const novosResultados = SimulationEngine.calculate(novasVariaveis, cenarioAtual.fazenda);
     const novosAlertas = InsightEngine.generateInsights(novasVariaveis, novosResultados, cenarioAtual.fazenda);
@@ -306,6 +333,26 @@ export function SimulacaoCenáriosView() {
     if (!Number.isFinite(pct)) return;
     const clamped = Math.max(45, Math.min(62, Math.round(pct * 10) / 10));
     updateVariable('rendimentoCarcaca', clamped / 100);
+  }
+
+  function updatePesoSaida(peso: number) {
+    if (!Number.isFinite(peso)) return;
+    const entrada = cenarioAtual
+      ? (cenarioAtual.variaveis.pesoMedioEntrada > 0
+          ? cenarioAtual.variaveis.pesoMedioEntrada
+          : cenarioAtual.variaveis.pesoMedioAtual)
+      : 200;
+    const clamped = Math.max(entrada + 10, Math.min(900, Math.round(peso)));
+    updateVariables({ pesoMedioSaida: clamped });
+  }
+
+  function recalcularPesoSaidaAuto() {
+    if (!cenarioAtual) return;
+    const vars = cenarioAtual.variaveis;
+    const entrada = vars.pesoMedioEntrada > 0 ? vars.pesoMedioEntrada : vars.pesoMedioAtual;
+    updateVariables({
+      pesoMedioSaida: Math.round(entrada + (vars.gmd || 0) * (vars.diasPermanencia || 0))
+    });
   }
 
   function updatePesoBaseAlimentacao(peso: number) {
@@ -496,7 +543,9 @@ export function SimulacaoCenáriosView() {
     ? Math.round(arrobasEntrada * v.precoCompraArrobaBoiMagro)
     : (v.precoBoiMagro || 3800);
 
-  const pesoFinalCalculado = Math.round(pesoEntradaEfetivo + v.gmd * v.diasPermanencia);
+  const pesoFinalSugerido = Math.round(pesoEntradaEfetivo + v.gmd * v.diasPermanencia);
+  const pesoFinalCalculado = v.pesoMedioSaida > 0 ? Math.round(v.pesoMedioSaida) : pesoFinalSugerido;
+  const saidaManual = v.pesoMedioSaida > 0 && Math.abs(v.pesoMedioSaida - pesoFinalSugerido) > 0.5;
   const arrobasFinal = Math.round(((pesoFinalCalculado * v.rendimentoCarcaca) / 15) * 10) / 10;
   // Ganho em @ de carcaça (mesma base da saída — não misturar com @ viva de entrada)
   const arrobasGanhas = Math.max(
@@ -908,12 +957,12 @@ export function SimulacaoCenáriosView() {
       <GastosPorDiaPanel resultados={r} variaveis={v} variante="compacto" />
 
       {/* 3. NAVEGAÇÃO DE ABAS — mobile-first */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl text-[10px] sm:text-xs font-bold">
+      <div className="flex gap-1 overflow-x-auto p-1 bg-slate-900/90 border border-slate-800 rounded-2xl text-[10px] sm:text-xs font-bold scrollbar-thin">
         
         <button
           type="button"
           onClick={() => setActiveTab('simulador')}
-          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+          className={`min-h-11 min-w-[4.5rem] flex-1 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 ${
             activeTab === 'simulador'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
@@ -926,7 +975,7 @@ export function SimulacaoCenáriosView() {
         <button
           type="button"
           onClick={() => setActiveTab('resumo')}
-          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+          className={`min-h-11 min-w-[4.5rem] flex-1 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 ${
             activeTab === 'resumo'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
@@ -939,7 +988,7 @@ export function SimulacaoCenáriosView() {
         <button
           type="button"
           onClick={() => setActiveTab('leilao')}
-          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+          className={`min-h-11 min-w-[4.5rem] flex-1 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 ${
             activeTab === 'leilao'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
@@ -951,8 +1000,21 @@ export function SimulacaoCenáriosView() {
 
         <button
           type="button"
+          onClick={() => setActiveTab('custos')}
+          className={`min-h-11 min-w-[4.5rem] flex-1 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 ${
+            activeTab === 'custos'
+              ? 'bg-emerald-600 text-white shadow-lg'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Receipt className="w-4 h-4 shrink-0" />
+          <span>Custos</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('resultado')}
-          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+          className={`min-h-11 min-w-[4.5rem] flex-1 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 ${
             activeTab === 'resultado'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
@@ -965,7 +1027,7 @@ export function SimulacaoCenáriosView() {
         <button
           type="button"
           onClick={() => setActiveTab('diagnostico')}
-          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+          className={`min-h-11 min-w-[4.5rem] flex-1 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 ${
             activeTab === 'diagnostico'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
@@ -978,7 +1040,7 @@ export function SimulacaoCenáriosView() {
         <button
           type="button"
           onClick={() => setActiveTab('comparador')}
-          className={`min-h-11 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+          className={`min-h-11 min-w-[4.5rem] flex-1 py-2.5 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 ${
             activeTab === 'comparador'
               ? 'bg-emerald-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-white'
@@ -1189,15 +1251,13 @@ export function SimulacaoCenáriosView() {
                     >
                       −
                     </button>
-                    <input
-                      type="number"
+                    <NumberField
                       min={6}
                       max={22}
                       step={0.5}
                       value={arrobasEntrada}
-                      onChange={(e) => updateArrobasEntrada(parseFloat(e.target.value))}
+                      onChange={(n) => updateArrobasEntrada(n)}
                       className="w-16 bg-slate-800 border border-amber-500/40 rounded-xl px-1 py-2 text-center text-amber-300 font-bold text-sm min-h-11"
-                      title="Arrobas de entrada do boi magro (1 @ = 30 kg vivo)"
                       aria-label="Arrobas de entrada do boi magro"
                     />
                     <span className="text-amber-300 font-bold">@</span>
@@ -1405,10 +1465,67 @@ export function SimulacaoCenáriosView() {
                 </button>
               </div>
 
-              <div className="text-[11px] text-slate-400 pt-1 flex flex-wrap gap-x-3 gap-y-1 border-t border-slate-800/60">
-                <span>Entrada: <strong className="text-white">{pesoEntradaEfetivo} kg</strong></span>
-                <span>Saída: <strong className="text-emerald-400">{pesoFinalCalculado} kg ({arrobasFinal} @ carcaça)</strong></span>
-                <span>Ganho carcaça: <strong className="text-amber-300">+{arrobasGanhas} @</strong></span>
+              <div className="text-[11px] text-slate-400 pt-1 space-y-2 border-t border-slate-800/60">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Entrada: <strong className="text-white">{pesoEntradaEfetivo} kg</strong></span>
+                  <span className="text-amber-300/90">
+                    Ganho auto: +{Math.round(v.gmd * v.diasPermanencia)} kg
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-slate-400 shrink-0">Peso médio de saída:</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => updatePesoSaida(pesoFinalCalculado - 10)}
+                      className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-xs"
+                      aria-label="Diminuir peso de saída"
+                    >
+                      −
+                    </button>
+                    <NumberField
+                      min={pesoEntradaEfetivo + 10}
+                      max={900}
+                      step={5}
+                      value={pesoFinalCalculado}
+                      onChange={(n) => updatePesoSaida(n)}
+                      className="w-20 bg-slate-950 border border-emerald-500/40 rounded-lg px-2 py-1 text-center text-emerald-300 font-bold text-xs"
+                      aria-label="Peso médio de saída em kg"
+                    />
+                    <span className="text-xs text-slate-400 font-bold">kg</span>
+                    <button
+                      type="button"
+                      onClick={() => updatePesoSaida(pesoFinalCalculado + 10)}
+                      className="w-7 h-7 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-bold text-xs"
+                      aria-label="Aumentar peso de saída"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={recalcularPesoSaidaAuto}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${
+                      saidaManual
+                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                        : 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
+                    }`}
+                    title="Recalcular saída = entrada + GMD × dias"
+                  >
+                    {saidaManual ? 'Usar automático' : 'Automático'}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  <span>
+                    Saída: <strong className="text-emerald-400">{pesoFinalCalculado} kg ({arrobasFinal} @ carcaça)</strong>
+                  </span>
+                  <span>Ganho carcaça: <strong className="text-amber-300">+{arrobasGanhas} @</strong></span>
+                  <span>
+                    Peso médio lote: <strong className="text-white">{Math.round((pesoEntradaEfetivo + pesoFinalCalculado) / 2)} kg</strong>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1579,14 +1696,12 @@ export function SimulacaoCenáriosView() {
                     <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
                       <span className="text-[10px] text-slate-400 block">Consumo (% do Peso Vivo):</span>
                       <div className="flex items-center gap-1 mt-1">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0.1"
-                          max="4.0"
+                        <NumberField
+                          step={0.1}
+                          min={0.1}
+                          max={4}
                           value={v.consumoRacaoPercentPV || 1.80}
-                          onChange={(e) => {
-                            const pv = parseFloat(e.target.value) || 0;
+                          onChange={(pv) => {
                             const pr = v.precoKgRacao || 1.58;
                             updateVariables({
                               consumoRacaoPercentPV: pv,
@@ -1603,14 +1718,12 @@ export function SimulacaoCenáriosView() {
                       <span className="text-[10px] text-slate-400 block">Preço R$/kg da Ração:</span>
                       <div className="flex items-center gap-1 mt-1">
                         <span className="text-xs text-slate-400">R$</span>
-                        <input
-                          type="number"
-                          step="0.05"
-                          min="0.5"
-                          max="10"
+                        <NumberField
+                          step={0.05}
+                          min={0.5}
+                          max={10}
                           value={v.precoKgRacao || 1.58}
-                          onChange={(e) => {
-                            const pr = parseFloat(e.target.value) || 0;
+                          onChange={(pr) => {
                             const pv = v.consumoRacaoPercentPV || 1.80;
                             updateVariables({
                               precoKgRacao: pr,
@@ -1639,13 +1752,12 @@ export function SimulacaoCenáriosView() {
                       >
                         −
                       </button>
-                      <input
-                        type="number"
+                      <NumberField
                         min={150}
                         max={800}
                         step={10}
                         value={pesoBaseAlimentacao}
-                        onChange={(e) => updatePesoBaseAlimentacao(parseFloat(e.target.value))}
+                        onChange={(n) => updatePesoBaseAlimentacao(n)}
                         className="w-20 bg-slate-900 border border-emerald-500/40 rounded-lg px-2 py-1 text-center text-emerald-300 font-bold text-xs"
                         aria-label="Peso base para cálculo da ração"
                       />
@@ -1736,6 +1848,8 @@ export function SimulacaoCenáriosView() {
               )}
             </div>
 
+            <RacaoAcumuladaPanel variaveis={v} />
+
           </div>
 
           {/* ACORDEÃO DE CUSTOS OPERACIONAIS E ESTRUTURA (PLANILHA) */}
@@ -1766,11 +1880,12 @@ export function SimulacaoCenáriosView() {
                   {/* Arrendamento Mensal */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
                     <span className="font-semibold text-slate-300">Arrendamento / Aluguel de Pasto (R$/mês)</span>
-                    <input
-                      type="number"
-                      step="500"
+                    <NumberField
+                      step={500}
+                      min={0}
                       value={v.arrendamentoMensal || 0}
-                      onChange={(e) => updateVariable('arrendamentoMensal', parseFloat(e.target.value) || 0)}
+                      onChange={(n) => updateVariable('arrendamentoMensal', n)}
+                      emptyValue={0}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
                     <p className="text-[10px] text-slate-500">Ex: R$ 3.500/mês ou R$ 0 se terra própria</p>
@@ -1779,11 +1894,12 @@ export function SimulacaoCenáriosView() {
                   {/* Mão de Obra Mensal */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
                     <span className="font-semibold text-slate-300">Mão de Obra / Campeiro (R$/mês)</span>
-                    <input
-                      type="number"
-                      step="500"
+                    <NumberField
+                      step={500}
+                      min={0}
                       value={v.maoDeObraMensal || 0}
-                      onChange={(e) => updateVariable('maoDeObraMensal', parseFloat(e.target.value) || 0)}
+                      onChange={(n) => updateVariable('maoDeObraMensal', n)}
+                      emptyValue={0}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
                     <p className="text-[10px] text-slate-500">Salários e encargos operacionais</p>
@@ -1792,11 +1908,12 @@ export function SimulacaoCenáriosView() {
                   {/* Seguro por Cabeça */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
                     <span className="font-semibold text-slate-300">Seguro por Boi (R$/cab)</span>
-                    <input
-                      type="number"
-                      step="1"
+                    <NumberField
+                      step={1}
+                      min={0}
                       value={v.custoSeguroCabeca || 0}
-                      onChange={(e) => updateVariable('custoSeguroCabeca', parseFloat(e.target.value) || 0)}
+                      onChange={(n) => updateVariable('custoSeguroCabeca', n)}
+                      emptyValue={0}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
                     <p className="text-[10px] text-slate-500">Ex: R$ 5,00 por cabeça no ciclo</p>
@@ -1805,11 +1922,12 @@ export function SimulacaoCenáriosView() {
                   {/* Imposto Senar / Funrural */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
                     <span className="font-semibold text-slate-300">Imposto Senar / Funrural (%)</span>
-                    <input
-                      type="number"
-                      step="0.1"
+                    <NumberField
+                      step={0.1}
+                      min={0}
                       value={v.impostoSenarPercent ?? 1.63}
-                      onChange={(e) => updateVariable('impostoSenarPercent', parseFloat(e.target.value) || 0)}
+                      onChange={(n) => updateVariable('impostoSenarPercent', n)}
+                      emptyValue={0}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
                     <p className="text-[10px] text-slate-500">Padrão nacional: 1.63% sobre a receita bruta</p>
@@ -1845,14 +1963,14 @@ export function SimulacaoCenáriosView() {
 
                     {unidadeArea === 'alqueires' ? (
                       <div>
-                        <input
-                          type="number"
-                          step="0.5"
+                        <NumberField
+                          step={0.5}
+                          min={0.1}
                           value={Math.round((v.areaPastagem / 2.42) * 10) / 10}
-                          onChange={(e) => {
-                            const alq = parseFloat(e.target.value) || 1;
+                          onChange={(alq) => {
                             updateVariable('areaPastagem', Math.round(alq * 2.42 * 10) / 10);
                           }}
+                          emptyValue={1}
                           className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                         />
                         <p className="text-[10px] text-slate-500 mt-1">
@@ -1861,11 +1979,12 @@ export function SimulacaoCenáriosView() {
                       </div>
                     ) : (
                       <div>
-                        <input
-                          type="number"
-                          step="5"
+                        <NumberField
+                          step={5}
+                          min={1}
                           value={v.areaPastagem}
-                          onChange={(e) => updateVariable('areaPastagem', parseFloat(e.target.value) || 1)}
+                          onChange={(n) => updateVariable('areaPastagem', n)}
+                          emptyValue={1}
                           className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                         />
                         <p className="text-[10px] text-slate-500 mt-1">
@@ -1878,11 +1997,12 @@ export function SimulacaoCenáriosView() {
                   {/* Sanitário & Vacinas */}
                   <div className="space-y-1.5 bg-slate-900 p-3 rounded-xl border border-slate-800">
                     <span className="font-semibold text-slate-300">Vacinas e Remédios (R$/cab/ano)</span>
-                    <input
-                      type="number"
-                      step="5"
+                    <NumberField
+                      step={5}
+                      min={0}
                       value={v.custosSanitariosCabecaAno}
-                      onChange={(e) => updateVariable('custosSanitariosCabecaAno', parseFloat(e.target.value) || 0)}
+                      onChange={(n) => updateVariable('custosSanitariosCabecaAno', n)}
+                      emptyValue={0}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
                     />
                     <p className="text-[10px] text-slate-500">Vermífugo, aftosa e sanidade preventiva</p>
@@ -1904,6 +2024,15 @@ export function SimulacaoCenáriosView() {
 
       {activeTab === 'leilao' && (
         <LeilaoMaximoView resultados={r} variaveis={v} />
+      )}
+
+      {activeTab === 'custos' && (
+        <DetalheCustosView
+          resultados={r}
+          variaveis={v}
+          fazenda={f}
+          nomeCenario={cenarioAtual.nome}
+        />
       )}
 
       {/* ABA 2: RESULTADOS MÊS A MÊS (FLUXO DE CAIXA DIDÁTICO) */}

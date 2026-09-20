@@ -20,6 +20,7 @@ export class SimulationEngine {
       quantidadeAnimais,
       pesoMedioAtual,
       pesoMedioEntrada,
+      pesoMedioSaida,
       gmd,
       rendimentoCarcaca,
       mortalidade,
@@ -35,7 +36,6 @@ export class SimulationEngine {
       custoAnimalDia,
       consumoRacaoPercentPV,
       precoKgRacao,
-      pesoBaseAlimentacao,
       areaPastagem,
       custoManutencaoPastagemHaAno,
       reformaPastagemAreaHa,
@@ -62,8 +62,9 @@ export class SimulationEngine {
     const animaisAbatidos = Math.round(quantidadeAnimais * (1 - mortalidadeEfetiva));
     const pesoEntradaEfetivo = pesoMedioEntrada > 0 ? pesoMedioEntrada : pesoMedioAtual;
     const ganhoPesoTotal = gmd * diasPermanencia;
-    // Saída sempre dinâmica: entrada + engorda (GMD × dias) — não usa pesoMedioSaida fixo
-    const pesoFinalCalculado = Math.round(pesoEntradaEfetivo + ganhoPesoTotal);
+    // Saída editável; se vazia/0, cai no automático (entrada + GMD × dias)
+    const pesoFinalSugerido = Math.round(pesoEntradaEfetivo + ganhoPesoTotal);
+    const pesoFinalCalculado = pesoMedioSaida > 0 ? Math.round(pesoMedioSaida) : pesoFinalSugerido;
     const pesoVivoFinalTotal = animaisAbatidos * pesoFinalCalculado;
     const pesoVivoMedio = Math.round((pesoEntradaEfetivo + pesoFinalCalculado) / 2);
 
@@ -88,14 +89,23 @@ export class SimulationEngine {
     const ganhoCarcaçaDia = gmd * rendimentoEfetivo;
     const diasParaProduzirUmaArroba = ganhoCarcaçaDia > 0 ? Math.round((15 / ganhoCarcaçaDia) * 10) / 10 : 0;
 
-    // 2. Nutrição e Alimentação (Cálculo Direto ou %PV e Preço/kg da Ração)
-    const pesoParaRacao = pesoBaseAlimentacao && pesoBaseAlimentacao > 0 ? pesoBaseAlimentacao : pesoVivoMedio;
-    let custoAnimalDiaEfetivo = custoAnimalDia;
-    if (consumoRacaoPercentPV && consumoRacaoPercentPV > 0 && precoKgRacao && precoKgRacao > 0) {
-      const consumoDiarioKg = pesoParaRacao * (consumoRacaoPercentPV / 100);
-      custoAnimalDiaEfetivo = Math.round(consumoDiarioKg * precoKgRacao * 100) / 100;
+    // 2. Nutrição e Alimentação — acumulativo dia a dia
+    // peso_dia = entrada + GMD×(dia−1); ração sobe com o peso
+    const usaPercentPV =
+      !!(consumoRacaoPercentPV && consumoRacaoPercentPV > 0 && precoKgRacao && precoKgRacao > 0);
+
+    let custoAlimentacao = 0;
+    for (let d = 0; d < diasPermanencia; d++) {
+      const pesoDia = pesoEntradaEfetivo + gmd * d;
+      let custoCabecaDia: number;
+      if (usaPercentPV) {
+        custoCabecaDia = pesoDia * (consumoRacaoPercentPV! / 100) * precoKgRacao!;
+      } else {
+        custoCabecaDia = custoAnimalDia || 0;
+      }
+      custoAlimentacao += quantidadeAnimais * custoCabecaDia;
     }
-    const custoAlimentacao = Math.round(quantidadeAnimais * custoAnimalDiaEfetivo * diasPermanencia);
+    custoAlimentacao = Math.round(custoAlimentacao);
 
     // 3. Receita Bruta e Descontos da Venda
     const receitaBruta = Math.round(producaoArrobas * precoProjetadoArroba);
