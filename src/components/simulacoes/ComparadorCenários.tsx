@@ -3,6 +3,7 @@
 import React from 'react';
 import { CenarioCompleto } from '../../types/simulation';
 import { Award, TrendingUp, ShieldAlert, DollarSign, BarChart3, Check } from 'lucide-react';
+import { FormulaHelp } from '../FormulaHelp';
 
 interface ComparadorCenáriosProps {
   cenarios: CenarioCompleto[];
@@ -36,6 +37,10 @@ export function ComparadorCenários({
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-emerald-400" />
             Comparativo de Cenários da Propriedade
+            <FormulaHelp
+              titulo="Comparador"
+              formula="Compara lucro, margem, ROI, risco e capital entre cenários salvos.\nDestaques = melhor valor em cada indicador (maior lucro/margem; menor risco/capital)."
+            />
           </h3>
           <p className="text-xs text-slate-400">
             Compare o impacto econômico e risco de até {cenarios.length} cenários lado a lado

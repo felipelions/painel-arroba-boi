@@ -34,6 +34,7 @@ import {
   CenarioVariaveis,
   FazendaConfig
 } from '../../types/simulation';
+import { FormulaHelp } from '../FormulaHelp';
 
 type LinhaCusto = {
   id: string;
@@ -41,6 +42,7 @@ type LinhaCusto = {
   nome: string;
   total: number;
   cor: string;
+  formula: string;
 };
 
 function formatBRL(valor: number, casas = 0) {
@@ -59,6 +61,7 @@ function montarLinhas(
   r: CenarioResultados,
   v: CenarioVariaveis
 ): LinhaCusto[] {
+  const meses = (v.diasPermanencia || 0) / 30;
   const frete = (r.animaisAbatidos || 0) * (v.freteVendaCabeca || 0);
   const comissao = Math.round((r.receitaBruta || 0) * ((v.comissaoVendaPercent || 0) / 100));
   const senar = r.custoImpostosVenda || 0;
@@ -74,21 +77,121 @@ function montarLinhas(
       (r.custoPastagem || 0) -
       (r.custoSeguro || 0)
   );
+  const pesoEntrada = v.pesoMedioEntrada > 0 ? v.pesoMedioEntrada : v.pesoMedioAtual;
+  const arrobasEntradaTxt = (pesoEntrada / 30).toFixed(1);
+  const usaPercentPV =
+    (v.consumoRacaoPercentPV || 0) > 0 && (v.precoKgRacao || 0) > 0;
 
   return [
-    { id: 'compra', grupo: 'Aquisição', nome: 'Compra dos animais (boi magro)', total: r.custoCompraAnimais || 0, cor: '#f59e0b' },
-    { id: 'racao', grupo: 'Engorda', nome: 'Alimentação e ração', total: r.custoAlimentacao || 0, cor: '#fb923c' },
-    { id: 'pasto', grupo: 'Engorda', nome: 'Pastagem (manutenção + reforma)', total: r.custoPastagem || 0, cor: '#34d399' },
-    { id: 'sanidade', grupo: 'Engorda', nome: 'Sanidade / vacinas', total: r.custoSanitario || 0, cor: '#a78bfa' },
-    { id: 'seguro', grupo: 'Engorda', nome: 'Seguro do rebanho', total: r.custoSeguro || 0, cor: '#818cf8' },
-    { id: 'arrend', grupo: 'Engorda', nome: 'Arrendamento', total: r.custoArrendamento || 0, cor: '#38bdf8' },
-    { id: 'mao', grupo: 'Engorda', nome: 'Mão de obra', total: r.custoMaoDeObra || 0, cor: '#22d3ee' },
-    { id: 'fixos', grupo: 'Engorda', nome: 'Custos fixos gerais', total: fixosGerais, cor: '#94a3b8' },
-    { id: 'juros', grupo: 'Engorda', nome: 'Juros / financeiro', total: r.custoFinanceiro || 0, cor: '#64748b' },
-    { id: 'outros', grupo: 'Engorda', nome: 'Outros custos variáveis', total: outrosVar, cor: '#78716c' },
-    { id: 'senar', grupo: 'Venda*', nome: 'Senar / Funrural', total: senar, cor: '#fb7185' },
-    { id: 'frete', grupo: 'Venda*', nome: 'Frete de venda', total: frete, cor: '#f472b6' },
-    { id: 'comissao', grupo: 'Venda*', nome: 'Comissão de venda', total: comissao, cor: '#e879f9' }
+    {
+      id: 'compra',
+      grupo: 'Aquisição',
+      nome: 'Compra dos animais (boi magro)',
+      total: r.custoCompraAnimais || 0,
+      cor: '#f59e0b',
+      formula:
+        v.precoCompraArrobaBoiMagro && v.precoCompraArrobaBoiMagro > 0
+          ? `quantidade × (peso_entrada ÷ 30) × preço/@ magro\n= ${v.quantidadeAnimais} × ${arrobasEntradaTxt} @ × R$ ${v.precoCompraArrobaBoiMagro.toFixed(2)}\n(1 @ viva de compra = 30 kg)`
+          : `quantidade × preço por cabeça\n= ${v.quantidadeAnimais} × R$ ${formatBRL(r.custoCompraPorCabeca || v.precoBoiMagro || 0)}`
+    },
+    {
+      id: 'racao',
+      grupo: 'Engorda',
+      nome: 'Alimentação e ração',
+      total: r.custoAlimentacao || 0,
+      cor: '#fb923c',
+      formula: usaPercentPV
+        ? `Soma dia a dia: para cada dia, peso = entrada + GMD×(dia−1);\nração/cab = peso × ${v.consumoRacaoPercentPV}% PV × R$ ${(v.precoKgRacao || 0).toFixed(2)}/kg;\ntotal = Σ (ração/cab × ${v.quantidadeAnimais}) em ${v.diasPermanencia} dias.`
+        : `quantidade × diária R$/cab/dia × dias\n= ${v.quantidadeAnimais} × R$ ${(v.custoAnimalDia || 0).toFixed(2)} × ${v.diasPermanencia}`
+    },
+    {
+      id: 'pasto',
+      grupo: 'Engorda',
+      nome: 'Pastagem (manutenção + reforma)',
+      total: r.custoPastagem || 0,
+      cor: '#34d399',
+      formula: `Manutenção: área_ha × custo_ha/ano × (meses/12)\n+ Reforma: área_reforma_ha × investimento_ha\nMeses do ciclo = ${v.diasPermanencia}/30 ≈ ${meses.toFixed(1)}`
+    },
+    {
+      id: 'sanidade',
+      grupo: 'Engorda',
+      nome: 'Sanidade / vacinas',
+      total: r.custoSanitario || 0,
+      cor: '#a78bfa',
+      formula: `quantidade × custo_sanitário_cab/ano × (meses/12)\n= ${v.quantidadeAnimais} × R$ ${v.custosSanitariosCabecaAno || 0} × (${meses.toFixed(1)}/12)`
+    },
+    {
+      id: 'seguro',
+      grupo: 'Engorda',
+      nome: 'Seguro do rebanho',
+      total: r.custoSeguro || 0,
+      cor: '#818cf8',
+      formula: `quantidade × seguro_por_cabeça\n= ${v.quantidadeAnimais} × R$ ${(v.custoSeguroCabeca || 0).toFixed(2)}`
+    },
+    {
+      id: 'arrend',
+      grupo: 'Engorda',
+      nome: 'Arrendamento',
+      total: r.custoArrendamento || 0,
+      cor: '#38bdf8',
+      formula: `arrendamento_mensal × meses do ciclo\n= R$ ${formatBRL(v.arrendamentoMensal || 0)} × ${meses.toFixed(1)}`
+    },
+    {
+      id: 'mao',
+      grupo: 'Engorda',
+      nome: 'Mão de obra',
+      total: r.custoMaoDeObra || 0,
+      cor: '#22d3ee',
+      formula: `mão_de_obra_mensal × meses do ciclo\n= R$ ${formatBRL(v.maoDeObraMensal || 0)} × ${meses.toFixed(1)}`
+    },
+    {
+      id: 'fixos',
+      grupo: 'Engorda',
+      nome: 'Custos fixos gerais',
+      total: fixosGerais,
+      cor: '#94a3b8',
+      formula: `custos_fixos_mensais × meses − (já separados arrendamento e mão de obra no extrato)\nBase: R$ ${formatBRL(v.custosFixosMensais || 0)}/mês × ${meses.toFixed(1)} meses`
+    },
+    {
+      id: 'juros',
+      grupo: 'Engorda',
+      nome: 'Juros / financeiro',
+      total: r.custoFinanceiro || 0,
+      cor: '#64748b',
+      formula: `financiamento × taxa_ano × (meses/12)\n= R$ ${formatBRL(v.financiamentoNecessario || 0)} × ${((v.taxaFinanciamentoAno || 0) * 100).toFixed(1)}% × (${meses.toFixed(1)}/12)`
+    },
+    {
+      id: 'outros',
+      grupo: 'Engorda',
+      nome: 'Outros custos variáveis',
+      total: outrosVar,
+      cor: '#78716c',
+      formula: `quantidade × outros_custo_cab/mês × meses\n= ${v.quantidadeAnimais} × R$ ${v.outrosCustosCabecaMes || 0} × ${meses.toFixed(1)}`
+    },
+    {
+      id: 'senar',
+      grupo: 'Venda*',
+      nome: 'Senar / Funrural',
+      total: senar,
+      cor: '#fb7185',
+      formula: `receita_bruta × (Senar%/100)\n= R$ ${formatBRL(r.receitaBruta || 0)} × ${(v.impostoSenarPercent ?? 1.63).toFixed(2)}%\nJá descontado da receita líquida (não entra de novo no custo total).`
+    },
+    {
+      id: 'frete',
+      grupo: 'Venda*',
+      nome: 'Frete de venda',
+      total: frete,
+      cor: '#f472b6',
+      formula: `animais_abatidos × frete_por_cabeça\n= ${r.animaisAbatidos} × R$ ${(v.freteVendaCabeca || 0).toFixed(2)}\nJá descontado da receita líquida.`
+    },
+    {
+      id: 'comissao',
+      grupo: 'Venda*',
+      nome: 'Comissão de venda',
+      total: comissao,
+      cor: '#e879f9',
+      formula: `receita_bruta × (comissão%/100)\n= R$ ${formatBRL(r.receitaBruta || 0)} × ${(v.comissaoVendaPercent || 0).toFixed(2)}%\nJá descontado da receita líquida.`
+    }
   ].filter((l) => l.total > 0.5);
 }
 
@@ -336,18 +439,21 @@ export function DetalheCustosView({
           label="Compra"
           value={`R$ ${formatBRL(r.custoCompraAnimais)}`}
           sub={`${pct(r.custoCompraAnimais, r.custoTotal)}% do custo`}
+          formula="qtd × (peso_entrada ÷ 30) × preço/@ magro\nou qtd × preço por cabeça"
         />
         <Kpi
           icon={<Wheat className="w-4 h-4 text-emerald-400" />}
           label="Engorda"
           value={`R$ ${formatBRL(custoEngorda)}`}
           sub={`R$ ${formatBRL(custoEngorda / qtd)}/cab`}
+          formula="custo_total − custo_compra\n(ração + pasto + sanidade + fixos + juros…)"
         />
         <Kpi
           icon={<Wallet className="w-4 h-4 text-sky-400" />}
           label="Custo total"
           value={`R$ ${formatBRL(r.custoTotal)}`}
           sub={`R$ ${formatBRL(r.custoPorCabeca)}/cab`}
+          formula="custo_compra + custo_engorda\nFrete/comissão/Senar não entram aqui"
         />
         <Kpi
           icon={<TrendingUp className="w-4 h-4 text-emerald-300" />}
@@ -355,13 +461,20 @@ export function DetalheCustosView({
           value={`R$ ${formatBRL(r.lucro)}`}
           sub={`${r.margemLiquida}% margem · ROI ${r.roi}%`}
           highlight={r.lucro >= 0}
+          formula="receita_líquida − custo_total\nROI = (lucro ÷ custo_total) × 100"
         />
       </div>
 
       {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md">
-          <h4 className="text-xs font-bold text-white mb-1">Composição: compra × engorda × venda</h4>
+          <h4 className="text-xs font-bold text-white mb-1 inline-flex items-center gap-1">
+            Composição: compra × engorda × venda
+            <FormulaHelp
+              titulo="Composição"
+              formula="Barras: custo de compra, custo de engorda e descontos de venda (Senar/frete/comissão).\nDescontos já saem da receita líquida."
+            />
+          </h4>
           <p className="text-[10px] text-slate-500 mb-2">
             *Descontos de venda já abatem a receita líquida
           </p>
@@ -398,7 +511,13 @@ export function DetalheCustosView({
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md">
-          <h4 className="text-xs font-bold text-white mb-1">Engorda: onde vai o dinheiro</h4>
+          <h4 className="text-xs font-bold text-white mb-1 inline-flex items-center gap-1">
+            Engorda: onde vai o dinheiro
+            <FormulaHelp
+              titulo="Distribuição da engorda"
+              formula="% de cada item = valor do item ÷ soma dos custos de engorda.\nNão inclui compra nem descontos de venda."
+            />
+          </h4>
           <p className="text-[10px] text-slate-500 mb-2">Distribuição dos custos operacionais do ciclo</p>
           <div className="h-52">
             {pieEngorda.length > 0 ? (
@@ -453,6 +572,7 @@ export function DetalheCustosView({
           itens={linhas.filter((l) => l.grupo === 'Aquisição')}
           qtd={qtd}
           basePct={r.custoTotal}
+          formula="Soma dos custos de compra do lote (boi magro por @ ou por cabeça)."
         />
         <GrupoCard
           titulo="Engorda"
@@ -460,6 +580,7 @@ export function DetalheCustosView({
           itens={linhas.filter((l) => l.grupo === 'Engorda')}
           qtd={qtd}
           basePct={r.custoTotal}
+          formula="Soma: ração + pasto + sanidade + seguro + arrendamento + mão de obra + fixos + juros + outros."
         />
         <GrupoCard
           titulo="Descontos na venda"
@@ -468,14 +589,19 @@ export function DetalheCustosView({
           qtd={abatidos}
           basePct={r.receitaBruta}
           nota="Já descontados da receita líquida"
+          formula="Senar + frete + comissão.\nSaem só da receita líquida (não somam de novo no custo)."
         />
       </div>
 
       {/* Tabela completa */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
         <div className="p-4 border-b border-slate-800">
-          <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+          <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
             Extrato completo de custos
+            <FormulaHelp
+              titulo="Como ler o extrato"
+              formula="Toque no ? de cada linha para ver a fórmula. Colunas: Total do lote; Por cabeça = total ÷ quantidade (ou abatidos na venda); % custo = item ÷ custo total (compra+engorda)."
+            />
           </h4>
         </div>
         <div className="overflow-x-auto">
@@ -484,9 +610,33 @@ export function DetalheCustosView({
               <tr>
                 <th className="text-left p-3 font-semibold">Grupo</th>
                 <th className="text-left p-3 font-semibold">Item</th>
-                <th className="text-right p-3 font-semibold">Total lote</th>
-                <th className="text-right p-3 font-semibold">Por cabeça</th>
-                <th className="text-right p-3 font-semibold">% custo</th>
+                <th className="text-right p-3 font-semibold">
+                  <span className="inline-flex items-center justify-end gap-0.5">
+                    Total lote
+                    <FormulaHelp
+                      titulo="Total do lote"
+                      formula="Soma do custo daquele item para todo o rebanho no período da simulação."
+                    />
+                  </span>
+                </th>
+                <th className="text-right p-3 font-semibold">
+                  <span className="inline-flex items-center justify-end gap-0.5">
+                    Por cabeça
+                    <FormulaHelp
+                      titulo="Por cabeça"
+                      formula={`Total do item ÷ quantidade de animais.\nAquisição/Engorda: ÷ ${qtd} comprados.\nVenda: ÷ ${abatidos} abatidos.`}
+                    />
+                  </span>
+                </th>
+                <th className="text-right p-3 font-semibold">
+                  <span className="inline-flex items-center justify-end gap-0.5">
+                    % custo
+                    <FormulaHelp
+                      titulo="% do custo"
+                      formula="(valor do item ÷ custo total) × 100.\nCusto total = compra + engorda. Itens de Venda* não entram nessa % (já saem da receita)."
+                    />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/70">
@@ -499,7 +649,12 @@ export function DetalheCustosView({
                     />
                     <span className="text-slate-400">{l.grupo}</span>
                   </td>
-                  <td className="p-3 text-slate-200 font-medium">{l.nome}</td>
+                  <td className="p-3 text-slate-200 font-medium">
+                    <span className="inline-flex items-center max-w-full">
+                      {l.nome}
+                      <FormulaHelp titulo={l.nome} formula={l.formula} />
+                    </span>
+                  </td>
                   <td className="p-3 text-right text-white font-bold">
                     R$ {formatBRL(l.total)}
                   </td>
@@ -515,7 +670,13 @@ export function DetalheCustosView({
               ))}
               <tr className="bg-slate-950 font-bold border-t border-slate-700">
                 <td className="p-3 text-red-300" colSpan={2}>
-                  CUSTO TOTAL (compra + engorda)
+                  <span className="inline-flex items-center">
+                    CUSTO TOTAL (compra + engorda)
+                    <FormulaHelp
+                      titulo="Custo total"
+                      formula="custo_compra + custo_engorda\n(ração + pasto + sanidade + seguro + fixos + arrendamento + mão de obra + juros + outros).\nFrete/comissão/Senar NÃO entram aqui."
+                    />
+                  </span>
                 </td>
                 <td className="p-3 text-right text-red-400">
                   R$ {formatBRL(r.custoTotal)}
@@ -527,7 +688,13 @@ export function DetalheCustosView({
               </tr>
               <tr className="bg-slate-950/80 font-bold">
                 <td className="p-3 text-slate-200" colSpan={2}>
-                  RECEITA LÍQUIDA
+                  <span className="inline-flex items-center">
+                    RECEITA LÍQUIDA
+                    <FormulaHelp
+                      titulo="Receita líquida"
+                      formula={`receita_bruta (@ abatidas × preço/@)\n+ bonificações − descontos\n− frete − comissão − Senar\n= R$ ${formatBRL(r.receitaLiquida)}`}
+                    />
+                  </span>
                 </td>
                 <td className="p-3 text-right text-emerald-400">
                   R$ {formatBRL(r.receitaLiquida)}
@@ -539,7 +706,13 @@ export function DetalheCustosView({
               </tr>
               <tr className="bg-emerald-950/40 font-black border-t-2 border-emerald-500/40">
                 <td className="p-3.5 text-emerald-300" colSpan={2}>
-                  LUCRO LÍQUIDO
+                  <span className="inline-flex items-center">
+                    LUCRO LÍQUIDO
+                    <FormulaHelp
+                      titulo="Lucro líquido"
+                      formula={`receita_líquida − custo_total\n= R$ ${formatBRL(r.receitaLiquida)} − R$ ${formatBRL(r.custoTotal)}\nMargem = (lucro ÷ receita líquida) × 100 = ${r.margemLiquida}%`}
+                    />
+                  </span>
                 </td>
                 <td className="p-3.5 text-right text-emerald-400 text-sm">
                   R$ {formatBRL(r.lucro)}
@@ -558,18 +731,18 @@ export function DetalheCustosView({
 
       {/* Métricas zootécnicas / unitárias */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        <Metric icon={<Scale className="w-3.5 h-3.5" />} label="@ abatidas" value={(r.producaoArrobas || 0).toLocaleString('pt-BR')} />
-        <Metric icon={<TrendingUp className="w-3.5 h-3.5" />} label="@ produzidas" value={(r.totalArrobasProduzidas || 0).toLocaleString('pt-BR')} />
-        <Metric icon={<Wheat className="w-3.5 h-3.5" />} label="Custo/@ engordada" value={`R$ ${formatBRL(r.custoArrobaProduzida, 2)}`} />
-        <Metric icon={<Landmark className="w-3.5 h-3.5" />} label="Custo/@ abatida" value={`R$ ${formatBRL(r.custoArroba, 2)}`} />
-        <Metric icon={<Users className="w-3.5 h-3.5" />} label="Diária total/cab" value={`R$ ${formatBRL(r.diariaTotalPorCabeca, 2)}`} />
-        <Metric icon={<TreePine className="w-3.5 h-3.5" />} label="Lucro/ha" value={`R$ ${formatBRL(r.lucroHectare)}`} />
-        <Metric icon={<Stethoscope className="w-3.5 h-3.5" />} label="Rendimento" value={`${r.rendimentoCarcacaPct}%`} />
-        <Metric icon={<Scale className="w-3.5 h-3.5" />} label="Carcaça/cab" value={`${r.pesoCarcacaPorCabeca} kg`} />
-        <Metric icon={<ShoppingCart className="w-3.5 h-3.5" />} label="Compra/cab" value={`R$ ${formatBRL(r.custoCompraPorCabeca)}`} />
-        <Metric icon={<Wallet className="w-3.5 h-3.5" />} label="Preço equilíbrio" value={`R$ ${formatBRL(r.precoEquilibrio, 2)}/@`} />
-        <Metric icon={<TrendingUp className="w-3.5 h-3.5" />} label="Margem segurança" value={`${r.margemSeguranca}%`} />
-        <Metric icon={<Users className="w-3.5 h-3.5" />} label="Lotação" value={`${r.lotacaoUAPorHa} UA/ha`} />
+        <Metric icon={<Scale className="w-3.5 h-3.5" />} label="@ abatidas" value={(r.producaoArrobas || 0).toLocaleString('pt-BR')} formula="(peso_vivo_final × rendimento) ÷ 15\n1 @ carcaça = 15 kg" />
+        <Metric icon={<TrendingUp className="w-3.5 h-3.5" />} label="@ produzidas" value={(r.totalArrobasProduzidas || 0).toLocaleString('pt-BR')} formula="((peso_saída − peso_entrada) × rendimento ÷ 15) × abatidos" />
+        <Metric icon={<Wheat className="w-3.5 h-3.5" />} label="Custo/@ engordada" value={`R$ ${formatBRL(r.custoArrobaProduzida, 2)}`} formula="custo_engorda ÷ @ produzidas\n(só o ganho na fazenda)" />
+        <Metric icon={<Landmark className="w-3.5 h-3.5" />} label="Custo/@ abatida" value={`R$ ${formatBRL(r.custoArroba, 2)}`} formula="custo_total ÷ @ abatidas" />
+        <Metric icon={<Users className="w-3.5 h-3.5" />} label="Diária total/cab" value={`R$ ${formatBRL(r.diariaTotalPorCabeca, 2)}`} formula="custo_engorda ÷ (qtd × dias)" />
+        <Metric icon={<TreePine className="w-3.5 h-3.5" />} label="Lucro/ha" value={`R$ ${formatBRL(r.lucroHectare)}`} formula="lucro ÷ área produtiva (ha)" />
+        <Metric icon={<Stethoscope className="w-3.5 h-3.5" />} label="Rendimento" value={`${r.rendimentoCarcacaPct}%`} formula="peso_carcaça ÷ peso_vivo\nlimitado entre 40% e 65%" />
+        <Metric icon={<Scale className="w-3.5 h-3.5" />} label="Carcaça/cab" value={`${r.pesoCarcacaPorCabeca} kg`} formula="peso_saída × rendimento" />
+        <Metric icon={<ShoppingCart className="w-3.5 h-3.5" />} label="Compra/cab" value={`R$ ${formatBRL(r.custoCompraPorCabeca)}`} formula="custo_compra ÷ quantidade" />
+        <Metric icon={<Wallet className="w-3.5 h-3.5" />} label="Preço equilíbrio" value={`R$ ${formatBRL(r.precoEquilibrio, 2)}/@`} formula="custo_total ÷ @ abatidas\n(= custo/@ abatida)" />
+        <Metric icon={<TrendingUp className="w-3.5 h-3.5" />} label="Margem segurança" value={`${r.margemSeguranca}%`} formula="((preço/@ − equilíbrio) ÷ preço/@) × 100" />
+        <Metric icon={<Users className="w-3.5 h-3.5" />} label="Lotação" value={`${r.lotacaoUAPorHa} UA/ha`} formula="((qtd × peso_médio) ÷ 450) ÷ área_pasto\n1 UA = 450 kg" />
       </div>
     </div>
   );
@@ -580,13 +753,15 @@ function Kpi({
   label,
   value,
   sub,
-  highlight
+  highlight,
+  formula
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sub: string;
   highlight?: boolean;
+  formula: string;
 }) {
   return (
     <div
@@ -599,6 +774,7 @@ function Kpi({
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
         {icon}
         {label}
+        <FormulaHelp titulo={label} formula={formula} />
       </div>
       <div className="text-base sm:text-lg font-black text-white truncate">{value}</div>
       <div className="text-[10px] text-slate-500 mt-0.5">{sub}</div>
@@ -612,7 +788,8 @@ function GrupoCard({
   itens,
   qtd,
   basePct,
-  nota
+  nota,
+  formula
 }: {
   titulo: string;
   icon: React.ReactNode;
@@ -620,6 +797,7 @@ function GrupoCard({
   qtd: number;
   basePct: number;
   nota?: string;
+  formula: string;
 }) {
   const total = itens.reduce((s, i) => s + i.total, 0);
   return (
@@ -628,6 +806,7 @@ function GrupoCard({
         <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
           {icon}
           {titulo}
+          <FormulaHelp titulo={titulo} formula={formula} />
         </h4>
         <strong className="text-xs text-emerald-300">R$ {formatBRL(total)}</strong>
       </div>
@@ -640,7 +819,8 @@ function GrupoCard({
           <li key={i.id} className="flex items-center justify-between gap-2 text-[11px]">
             <span className="text-slate-400 truncate flex items-center gap-1.5 min-w-0">
               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: i.cor }} />
-              {i.nome}
+              <span className="truncate">{i.nome}</span>
+              <FormulaHelp titulo={i.nome} formula={i.formula} />
             </span>
             <span className="text-slate-200 font-semibold shrink-0">
               R$ {formatBRL(i.total)}
@@ -663,17 +843,20 @@ function GrupoCard({
 function Metric({
   icon,
   label,
-  value
+  value,
+  formula
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  formula: string;
 }) {
   return (
     <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-2.5">
       <div className="flex items-center gap-1 text-[9px] uppercase font-bold text-slate-500 tracking-wide mb-0.5">
         <span className="text-slate-400">{icon}</span>
         {label}
+        <FormulaHelp titulo={label} formula={formula} align="right" />
       </div>
       <div className="text-xs font-bold text-white truncate">{value}</div>
     </div>

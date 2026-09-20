@@ -17,6 +17,7 @@ import { ResumoFinanceiroView } from './ResumoFinanceiroView';
 import { LeilaoMaximoView } from './LeilaoMaximoView';
 import { DetalheCustosView } from './DetalheCustosView';
 import { NumberField } from '../NumberField';
+import { FormulaHelp } from '../FormulaHelp';
 import {
   Sparkles,
   Mic,
@@ -43,7 +44,6 @@ import {
   X,
   PlusCircle,
   MinusCircle,
-  HelpCircle,
   ArrowUpRight,
   ShieldAlert,
   Wallet,
@@ -754,6 +754,10 @@ export function SimulacaoCenáriosView() {
               <span className="flex items-center gap-1.5">
                 <Wallet className="w-4 h-4" />
                 Valor Puro do Ganho
+                <FormulaHelp
+                  titulo="Valor puro do ganho"
+                  formula="lucro = receita_líquida − custo_total\nlucro/boi = lucro ÷ animais_abatidos\nmargem = (lucro ÷ receita_líquida) × 100"
+                />
               </span>
               <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[10px] border border-emerald-500/30">
                 {r?.margemLiquida ?? 0}% margem
@@ -789,6 +793,10 @@ export function SimulacaoCenáriosView() {
               <span className="flex items-center gap-1.5">
                 <TrendingUp className="w-4 h-4" />
                 Custo da @ Engordada
+                <FormulaHelp
+                  titulo="Custo da @ engordada"
+                  formula="custo_engorda ÷ @ produzidas\n@ produzidas = (ganho_peso × rendimento) ÷ 15\ndias p/ 1 @ = 15 ÷ (GMD × rendimento)"
+                />
               </span>
               <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px] border border-amber-500/30">
                 +{ganhoPorArrobaProduzida >= 0 ? 'R$ ' + (ganhoPorArrobaProduzida ?? 0).toFixed(2) : '-'} /@
@@ -818,6 +826,10 @@ export function SimulacaoCenáriosView() {
               <span className="flex items-center gap-1.5">
                 <Percent className="w-4 h-4" />
                 Boi vs CDI / Selic
+                <FormulaHelp
+                  titulo="Boi vs Selic"
+                  formula="ROI boi = (lucro ÷ custo_total) × 100\nSelic no ciclo ≈ (1+taxa)^(dias/365) − 1\nganho extra = lucro_boi − rendimento_Selic"
+                />
               </span>
               <span className="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full text-[10px] border border-blue-500/30">
                 {r.comparativoSelic?.relacaoComSelic || 0}x a Selic
@@ -849,6 +861,10 @@ export function SimulacaoCenáriosView() {
               <span className="flex items-center gap-1.5">
                 <Scale className="w-4 h-4" />
                 Preço de Empate
+                <FormulaHelp
+                  titulo="Preço de empate"
+                  formula="preço_equilíbrio = custo_total ÷ @ abatidas\nmargem_segurança = ((preço/@ − equilíbrio) ÷ preço/@) × 100"
+                />
               </span>
               <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
                 r.margemSeguranca >= 15 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
@@ -906,7 +922,13 @@ export function SimulacaoCenáriosView() {
           
           {/* Item 1: Quantidade Comprada vs Rebanho Vivo */}
           <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rebanho Vivo Atual</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider inline-flex items-center gap-1">
+              Rebanho Vivo Atual
+              <FormulaHelp
+                titulo="Rebanho vivo"
+                formula="abatidos = qtd × (1 − mortalidade)\nvivo = qtd − mortes"
+              />
+            </span>
             <div className="text-lg sm:text-xl font-black text-emerald-400">
               {(r?.rebanhoVivoAtual ?? v.quantidadeAnimais)} <span className="text-xs font-normal text-slate-400">cab</span>
             </div>
@@ -918,7 +940,13 @@ export function SimulacaoCenáriosView() {
 
           {/* Item 2: Investimento Total na Compra */}
           <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Investimento em Gado</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider inline-flex items-center gap-1">
+              Investimento em Gado
+              <FormulaHelp
+                titulo="Investimento em gado"
+                formula="qtd × (peso÷30) × preço/@ magro\nou qtd × preço/cabeça"
+              />
+            </span>
             <div className="text-lg sm:text-xl font-black text-amber-300">
               R$ {(r?.custoCompraAnimais ?? 0).toLocaleString('pt-BR')}
             </div>
@@ -929,7 +957,13 @@ export function SimulacaoCenáriosView() {
 
           {/* Item 3: Preço por @ do Boi Magro */}
           <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Preço de Compra por @</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider inline-flex items-center gap-1">
+              Preço de Compra por @
+              <FormulaHelp
+                titulo="Compra por @"
+                formula="@ entrada = peso ÷ 30\ncusto/@ = custo_compra ÷ (qtd × @ entrada)"
+              />
+            </span>
             <div className="text-lg sm:text-xl font-black text-purple-300">
               R$ {(r?.custoCompraPorArroba ?? v.precoCompraArrobaBoiMagro ?? 0).toFixed(2)}
               <span className="text-xs font-normal text-slate-400 ml-1">/@</span>
@@ -941,7 +975,13 @@ export function SimulacaoCenáriosView() {
 
           {/* Item 4: Evolução de Peso do Animal */}
           <div className="bg-slate-950/70 p-3 rounded-2xl border border-slate-800/80 space-y-1">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Evolução no Trato</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider inline-flex items-center gap-1">
+              Evolução no Trato
+              <FormulaHelp
+                titulo="Evolução de peso"
+                formula="ganho = GMD × dias\nsaída = entrada + ganho\n(ou peso_saída manual)"
+              />
+            </span>
             <div className="text-lg sm:text-xl font-black text-blue-400">
               +{((v.gmd || 0) * (v.diasPermanencia || 0)).toFixed(0)} <span className="text-xs font-normal text-slate-400">kg ganho</span>
             </div>
@@ -1067,6 +1107,10 @@ export function SimulacaoCenáriosView() {
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <TrendingUp className="w-4 h-4 text-emerald-400" />
                     Venda da Arroba no Frigorífico
+                    <FormulaHelp
+                      titulo="Preço da arroba / receita"
+                      formula="receita_bruta = @ abatidas × preço/@\n@ abatidas = (peso_vivo × rendimento) ÷ 15"
+                    />
                   </h4>
                   <p className="text-[11px] text-slate-400">Preço esperado na data de abate</p>
                 </div>
@@ -1116,7 +1160,13 @@ export function SimulacaoCenáriosView() {
               </div>
 
               <div className="text-[11px] text-slate-400 pt-1 flex justify-between border-t border-slate-800/60">
-                <span>Receita Bruta Projetada:</span>
+                <span className="inline-flex items-center gap-1">
+                  Receita Bruta Projetada:
+                  <FormulaHelp
+                    titulo="Receita bruta"
+                    formula="produção_arrobas × preço_projetado_@"
+                  />
+                </span>
                 <strong className="text-white">R$ {r.receitaBruta.toLocaleString('pt-BR')}</strong>
               </div>
             </div>
@@ -1128,6 +1178,10 @@ export function SimulacaoCenáriosView() {
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <DollarSign className="w-4 h-4 text-amber-400" />
                     Compra do Boi Magro
+                    <FormulaHelp
+                      titulo="Compra boi magro / @ entrada"
+                      formula="@ entrada = peso ÷ 30\ncusto/cab = @ entrada × preço/@\nou preço por cabeça direto"
+                    />
                   </h4>
                   <p className="text-[11px] text-slate-400">Preço de aquisição para engorda</p>
                 </div>
@@ -1279,8 +1333,12 @@ export function SimulacaoCenáriosView() {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider inline-flex items-center gap-1.5">
                     Quantidade de Bois no Lote
+                    <FormulaHelp
+                      titulo="Quantidade de animais"
+                      formula="abatidos = qtd × (1 − mortalidade)\ncusto_compra e ração escalam com a qtd"
+                    />
                   </h4>
                   <p className="text-[11px] text-slate-400">Total de animais a engordar</p>
                 </div>
@@ -1342,6 +1400,10 @@ export function SimulacaoCenáriosView() {
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <Clock className="w-4 h-4 text-emerald-400" />
                     Dias de Permanência / Trato
+                    <FormulaHelp
+                      titulo="Dias de permanência"
+                      formula="meses = dias ÷ 30\npeso_saída ≈ entrada + GMD × dias\ncustos mensais × meses"
+                    />
                   </h4>
                   <p className="text-[11px] text-slate-400">Duração do ciclo até a venda</p>
                 </div>
@@ -1404,8 +1466,12 @@ export function SimulacaoCenáriosView() {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-md space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider inline-flex items-center gap-1.5">
                     Ganho Médio Diário (GMD)
+                    <FormulaHelp
+                      titulo="GMD / peso saída"
+                      formula="ganho = GMD × dias\nsaída = entrada + ganho (ou manual)\n@ carcaça ≈ (peso × rendimento) ÷ 15"
+                    />
                   </h4>
                   <p className="text-[11px] text-slate-400">Engorda diária por animal</p>
                 </div>
@@ -1536,6 +1602,10 @@ export function SimulacaoCenáriosView() {
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <Scale className="w-4 h-4 text-purple-400" />
                     Rendimento de Carcaça
+                    <FormulaHelp
+                      titulo="Rendimento de carcaça"
+                      formula="carcaça = peso_vivo × rendimento\n@ = carcaça ÷ 15\nkg vivo por @ = 15 ÷ rendimento"
+                    />
                   </h4>
                   <p className="text-[11px] text-slate-400">% do peso vivo que vira carcaça no frigorífico</p>
                 </div>
@@ -1655,6 +1725,10 @@ export function SimulacaoCenáriosView() {
                   <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                     <Zap className="w-4 h-4 text-emerald-400" />
                     Alimentação & Ração (Planilha)
+                    <FormulaHelp
+                      titulo="Alimentação & ração"
+                      formula="Planilha: Σ dia a dia → peso × %PV × R$/kg\nDiária: qtd × R$/cab/dia × dias"
+                    />
                   </h4>
                   <p className="text-[11px] text-slate-400">Consumo em %PV e preço do kg</p>
                 </div>
@@ -1862,7 +1936,13 @@ export function SimulacaoCenáriosView() {
               <div className="flex items-center gap-2.5">
                 <Sliders className="w-4 h-4 text-emerald-400" />
                 <div>
-                  <h4 className="text-xs font-bold text-white">Custos da Fazenda (Arrendamento, Mão de Obra, Pasto e Senar)</h4>
+                  <h4 className="text-xs font-bold text-white inline-flex items-center gap-1.5">
+                    Custos da Fazenda (Arrendamento, Mão de Obra, Pasto e Senar)
+                    <FormulaHelp
+                      titulo="Custos da fazenda"
+                      formula="arrendamento/mão de obra × meses\npasto: área × custo_ha × (meses/12)\nSenar = receita_bruta × %"
+                    />
+                  </h4>
                   <p className="text-[11px] text-slate-400">Valores fixos, impostos de abate e área de pastagem</p>
                 </div>
               </div>
@@ -2046,6 +2126,10 @@ export function SimulacaoCenáriosView() {
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
               <Wallet className="w-4 h-4 text-emerald-400" />
               Fechamento Completo da Conta do Boi (DRE)
+              <FormulaHelp
+                titulo="DRE do lote"
+                formula="custo_total = compra + engorda\nreceita_líquida = bruta − frete − comissão − Senar\nlucro = receita_líquida − custo_total"
+              />
             </h4>
             <p className="text-xs text-slate-400">
               Extrato detalhado de compra, custos operacionais e resultado líquido no bolso
@@ -2055,7 +2139,15 @@ export function SimulacaoCenáriosView() {
               <table className="w-full text-left text-xs whitespace-nowrap">
                 <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
                   <tr>
-                    <th className="p-3 font-semibold">Item de Custo / Receita</th>
+                    <th className="p-3 font-semibold">
+                      <span className="inline-flex items-center gap-1">
+                        Item de Custo / Receita
+                        <FormulaHelp
+                          titulo="Colunas da DRE"
+                          formula="Total do lote; Por cabeça = total ÷ qtd (ou abatidos);\n% = item ÷ custo_total (exceto descontos de venda)."
+                        />
+                      </span>
+                    </th>
                     <th className="p-3 font-semibold text-right">Total do Lote</th>
                     <th className="p-3 font-semibold text-right">Por Cabeça</th>
                     <th className="p-3 font-semibold text-right">% do Total</th>
@@ -2063,31 +2155,56 @@ export function SimulacaoCenáriosView() {
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   <tr>
-                    <td className="p-3 text-slate-300 font-medium">1. Compra dos Animais (Gado Magro)</td>
+                    <td className="p-3 text-slate-300 font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        1. Compra dos Animais (Gado Magro)
+                        <FormulaHelp titulo="Compra" formula="qtd × (peso÷30) × preço/@\nou qtd × preço/cabeça" />
+                      </span>
+                    </td>
                     <td className="p-3 text-right font-bold text-white">R$ {r.custoCompraAnimais.toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-300">R$ {Math.round(r.custoCompraAnimais / Math.max(1, v.quantidadeAnimais)).toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round((r.custoCompraAnimais / r.custoTotal) * 100) : 0}%</td>
                   </tr>
                   <tr>
-                    <td className="p-3 text-slate-300 font-medium">2. Alimentação & Ração ({v.diasPermanencia} dias)</td>
+                    <td className="p-3 text-slate-300 font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        2. Alimentação & Ração ({v.diasPermanencia} dias)
+                        <FormulaHelp titulo="Alimentação" formula="Planilha: Σ peso×%PV×R$/kg\nou qtd × diária × dias" />
+                      </span>
+                    </td>
                     <td className="p-3 text-right font-bold text-amber-300">R$ {r.custoAlimentacao.toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-300">R$ {Math.round(r.custoAlimentacao / Math.max(1, v.quantidadeAnimais)).toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round((r.custoAlimentacao / r.custoTotal) * 100) : 0}%</td>
                   </tr>
                   <tr>
-                    <td className="p-3 text-slate-300 font-medium">3. Arrendamento & Mão de Obra</td>
+                    <td className="p-3 text-slate-300 font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        3. Arrendamento & Mão de Obra
+                        <FormulaHelp titulo="Arrendamento & mão de obra" formula="(arrendamento + mão_de_obra)_mensal × (dias÷30)" />
+                      </span>
+                    </td>
                     <td className="p-3 text-right font-bold text-slate-200">R$ {(r.custoArrendamento + r.custoMaoDeObra).toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-300">R$ {Math.round((r.custoArrendamento + r.custoMaoDeObra) / Math.max(1, v.quantidadeAnimais)).toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round(((r.custoArrendamento + r.custoMaoDeObra) / r.custoTotal) * 100) : 0}%</td>
                   </tr>
                   <tr>
-                    <td className="p-3 text-slate-300 font-medium">4. Sanidade, Seguro & Pastagem</td>
+                    <td className="p-3 text-slate-300 font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        4. Sanidade, Seguro & Pastagem
+                        <FormulaHelp titulo="Sanidade, seguro e pasto" formula="sanidade: qtd×cab/ano×(meses/12)\nseguro: qtd×R$/cab\npasto: área×custo_ha×(meses/12)" />
+                      </span>
+                    </td>
                     <td className="p-3 text-right font-bold text-slate-200">R$ {(r.custoSanitario + r.custoSeguro + r.custoPastagem).toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-300">R$ {Math.round((r.custoSanitario + r.custoSeguro + r.custoPastagem) / Math.max(1, v.quantidadeAnimais)).toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-400">{r.custoTotal > 0 ? Math.round(((r.custoSanitario + r.custoSeguro + r.custoPastagem) / r.custoTotal) * 100) : 0}%</td>
                   </tr>
                   <tr>
-                    <td className="p-3 text-slate-300 font-medium">5. Descontos na venda (Senar, frete e comissão)</td>
+                    <td className="p-3 text-slate-300 font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        5. Descontos na venda (Senar, frete e comissão)
+                        <FormulaHelp titulo="Descontos na venda" formula="Senar = receita×%\nfrete = abatidos×R$/cab\ncomissão = receita×%\nJá saem da receita líquida" />
+                      </span>
+                    </td>
                     <td className="p-3 text-right font-bold text-slate-200">
                       R$ {(
                         (r.custoImpostosVenda || 0) +
@@ -2105,19 +2222,34 @@ export function SimulacaoCenáriosView() {
                     <td className="p-3 text-right text-slate-500 text-[10px]">já na receita líq.</td>
                   </tr>
                   <tr className="bg-slate-950 font-bold border-t border-slate-700">
-                    <td className="p-3 text-red-300">CUSTO TOTAL (compra + engorda)</td>
+                    <td className="p-3 text-red-300">
+                      <span className="inline-flex items-center gap-1">
+                        CUSTO TOTAL (compra + engorda)
+                        <FormulaHelp titulo="Custo total" formula="compra + engorda\n(sem frete/comissão/Senar)" />
+                      </span>
+                    </td>
                     <td className="p-3 text-right text-red-400 text-sm">R$ {r.custoTotal.toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-red-400">R$ {r.custoPorCabeca.toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-400">100%</td>
                   </tr>
                   <tr className="bg-slate-950/80 font-bold">
-                    <td className="p-3 text-slate-200">RECEITA LÍQUIDA DA VENDA</td>
+                    <td className="p-3 text-slate-200">
+                      <span className="inline-flex items-center gap-1">
+                        RECEITA LÍQUIDA DA VENDA
+                        <FormulaHelp titulo="Receita líquida" formula="bruta + bônus − descontos\n− frete − comissão − Senar" />
+                      </span>
+                    </td>
                     <td className="p-3 text-right text-emerald-400 text-sm">R$ {r.receitaLiquida.toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-emerald-400">R$ {r.vendaPorCabeca.toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-right text-slate-400">-</td>
                   </tr>
                   <tr className="bg-emerald-950/40 font-black border-t-2 border-emerald-500/50">
-                    <td className="p-3.5 text-emerald-300 text-sm uppercase">SOBRA LÍQUIDA NO BOLSO</td>
+                    <td className="p-3.5 text-emerald-300 text-sm uppercase">
+                      <span className="inline-flex items-center gap-1 normal-case sm:uppercase">
+                        SOBRA LÍQUIDA NO BOLSO
+                        <FormulaHelp titulo="Lucro líquido" formula="receita_líquida − custo_total\nmargem = (lucro ÷ receita) × 100" />
+                      </span>
+                    </td>
                     <td className="p-3.5 text-right text-emerald-400 text-base sm:text-lg">R$ {r.lucro.toLocaleString('pt-BR')}</td>
                     <td className="p-3.5 text-right text-emerald-400 text-base">R$ {r.lucroPorCabeca.toLocaleString('pt-BR')} /boi</td>
                     <td className="p-3.5 text-right text-emerald-300">{r.margemLiquida}% margem</td>
@@ -2207,6 +2339,10 @@ export function SimulacaoCenáriosView() {
             <h4 className="text-sm font-bold text-white flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
               Diagnóstico Automático da sua Operação
+              <FormulaHelp
+                titulo="Diagnóstico / Score de risco"
+                formula="Score 0–100 a partir da margem de segurança, capital necessário, lotação UA/ha, clima e mortalidade.\n≤25 baixo · ≤50 moderado · ≤75 elevado · senão crítico."
+              />
             </h4>
           </div>
 

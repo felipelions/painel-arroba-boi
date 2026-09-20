@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Gavel, AlertTriangle, CheckCircle2, TrendingDown, Target } from 'lucide-react';
 import { CenarioResultados, CenarioVariaveis } from '../../types/simulation';
+import { FormulaHelp } from '../FormulaHelp';
 
 function formatBRL(valor: number, casas = 0) {
   return valor.toLocaleString('pt-BR', {
@@ -71,6 +72,10 @@ export function LeilaoMaximoView({
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Gavel className="w-4 h-4 text-amber-400" />
           Calculadora de leilão — até quanto pagar no boi
+          <FormulaHelp
+            titulo="Teto de leilão"
+            formula="teto_lote = receita_líquida − engorda − lucro_mínimo\nteto/boi = teto_lote ÷ qtd\n@ entrada = peso_entrada ÷ 30\nteto/@ = teto/boi ÷ @ entrada"
+          />
         </h3>
         <p className="text-xs text-slate-400">
           Com base na venda projetada e em todos os custos de engorda do seu cenário
@@ -87,8 +92,12 @@ export function LeilaoMaximoView({
       }`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-amber-400 mb-1">
+            <div className="text-[10px] font-black uppercase tracking-wider text-amber-400 mb-1 inline-flex items-center gap-1">
               Preço máximo no leilão
+              <FormulaHelp
+                titulo="Preço máximo"
+                formula="teto = receita − engorda − lucro mínimo\n@ entrada = peso ÷ 30"
+              />
             </div>
             <div className="text-3xl sm:text-5xl font-black text-white tracking-tight">
               R$ {formatBRL(tetoPorCabeca)}
@@ -153,6 +162,10 @@ export function LeilaoMaximoView({
             <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
               <Target className="w-4 h-4 text-emerald-400" />
               Lucro mínimo que eu quero por boi
+              <FormulaHelp
+                titulo="Lucro mínimo"
+                formula="lucro_mín_total = lucro_mín/boi × quantidade\nQuanto menor o lucro exigido, maior o teto de compra"
+              />
             </h4>
             <p className="text-[11px] text-slate-400">
               Quanto menor o lucro exigido, maior o teto que você pode pagar no leilão
@@ -212,6 +225,10 @@ export function LeilaoMaximoView({
         <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
           <TrendingDown className="w-4 h-4 text-slate-400" />
           Como o teto é calculado (por boi)
+          <FormulaHelp
+            titulo="Conta do teto"
+            formula="venda_líq/boi − engorda/boi − lucro_mín/boi\n@ entrada = peso ÷ 30"
+          />
         </h4>
 
         <div className="space-y-2 text-xs">

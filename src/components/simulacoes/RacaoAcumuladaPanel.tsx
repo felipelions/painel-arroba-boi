@@ -14,6 +14,7 @@ import {
   Legend
 } from 'recharts';
 import { CenarioVariaveis } from '../../types/simulation';
+import { FormulaHelp } from '../FormulaHelp';
 
 export type DiaRacao = {
   dia: number;
@@ -148,6 +149,10 @@ export function RacaoAcumuladaPanel({ variaveis: v }: RacaoAcumuladaPanelProps) 
           <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
             <Beef className="w-4 h-4 text-amber-400" />
             Ração acumulada (dia a dia)
+            <FormulaHelp
+              titulo="Ração acumulada"
+              formula="peso = entrada + GMD×(dia−1)\nração = peso × %PV × R$/kg\nrendimento dia = GMD × rendimento carcaça"
+            />
           </h4>
           <p className="text-[11px] text-slate-400 mt-0.5">
             Peso = entrada + GMD × dias · ração pelo peso do dia · rendimento = GMD × % carcaça

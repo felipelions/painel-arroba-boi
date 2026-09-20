@@ -22,6 +22,7 @@ import {
   Cell
 } from 'recharts';
 import { CenarioResultados, CenarioVariaveis } from '../../types/simulation';
+import { FormulaHelp } from '../FormulaHelp';
 
 type Alternativa = {
   id: string;
@@ -178,6 +179,10 @@ export function ResumoFinanceiroView({
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Scale className="w-4 h-4 text-emerald-400" />
           Resumo do ciclo — gasto, ganho e alternativas
+          <FormulaHelp
+            titulo="Comparativo financeiro"
+            formula="Capital = custo_total do lote.\nBoi: lucro = receita_líquida − custo_total.\nAplicações: capital × ((1+taxa)^(dias/365) − 1)"
+          />
         </h3>
         <p className="text-xs text-slate-400">
           Comparativo do capital investido no lote ({dias} dias / {meses} meses) versus aplicações de renda fixa
@@ -188,8 +193,12 @@ export function ResumoFinanceiroView({
       <div className="bg-gradient-to-br from-emerald-950/80 via-slate-900 to-slate-900 border-2 border-emerald-500/50 rounded-3xl p-4 sm:p-6 shadow-xl space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-emerald-400 mb-1">
+            <div className="text-[10px] font-black uppercase tracking-wider text-emerald-400 mb-1 inline-flex items-center gap-1">
               Valor puro do ganho
+              <FormulaHelp
+                titulo="Valor puro do ganho"
+                formula="lucro = receita_líquida − custo_total\n= recebido − aquisição − custos de engorda"
+              />
             </div>
             <div className={`text-3xl sm:text-4xl font-black tracking-tight ${
               ganhoPuro >= 0 ? 'text-emerald-300' : 'text-red-300'
@@ -263,6 +272,10 @@ export function ResumoFinanceiroView({
           <div className="flex items-center gap-2 text-[10px] font-bold text-red-400 uppercase tracking-wider">
             <TrendingDown className="w-3.5 h-3.5" />
             Quanto vou gastar
+            <FormulaHelp
+              titulo="Quanto vou gastar"
+              formula="custo_total = compra + engorda"
+            />
           </div>
           <div className="text-2xl font-black text-red-300">
             R$ {formatBRL(gasto)}
@@ -280,6 +293,10 @@ export function ResumoFinanceiroView({
           <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
             <Wallet className="w-3.5 h-3.5" />
             Quanto vou receber
+            <FormulaHelp
+              titulo="Quanto vou receber"
+              formula="receita_líquida = receita_bruta + bônus − descontos\n− frete − comissão − Senar"
+            />
           </div>
           <div className="text-2xl font-black text-emerald-300">
             R$ {formatBRL(receita)}
@@ -299,6 +316,10 @@ export function ResumoFinanceiroView({
           <div className="flex items-center gap-2 text-[10px] font-bold text-amber-400 uppercase tracking-wider">
             <TrendingUp className="w-3.5 h-3.5" />
             Sobra no bolso
+            <FormulaHelp
+              titulo="Sobra no bolso"
+              formula="lucro = receita_líquida − custo_total\nrentabilidade = (lucro ÷ capital) × 100"
+            />
           </div>
           <div className={`text-2xl font-black ${lucroBoi >= 0 ? 'text-amber-300' : 'text-red-300'}`}>
             {lucroBoi >= 0 ? '+' : ''}R$ {formatBRL(lucroBoi)}
@@ -354,7 +375,18 @@ export function ResumoFinanceiroView({
                     {alt.icon}
                   </span>
                   <div>
-                    <h4 className="text-xs font-bold text-white">{alt.nome}</h4>
+                    <h4 className="text-xs font-bold text-white inline-flex items-center gap-1">
+                      {alt.nome}
+                      <FormulaHelp
+                        titulo={alt.nome}
+                        formula={
+                          eBoi
+                            ? 'rendimento = lucro do lote\n= receita_líquida − custo_total'
+                            : `rendimento = capital × ((1 + taxa)^(${dias}/365) − 1)\ntaxa a.a. ≈ ${alt.taxaAnualPct}%`
+                        }
+                        align="left"
+                      />
+                    </h4>
                     <p className="text-[10px] text-slate-500">{alt.descricao}</p>
                   </div>
                 </div>
@@ -397,7 +429,13 @@ export function ResumoFinanceiroView({
       {/* Gráfico comparativo */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg space-y-3">
         <div>
-          <h4 className="text-sm font-bold text-white">Rendimento estimado no período</h4>
+          <h4 className="text-sm font-bold text-white inline-flex items-center gap-1">
+            Rendimento estimado no período
+            <FormulaHelp
+              titulo="Rendimento no período"
+              formula="Boi: lucro líquido.\nDemais: capital × ((1+taxa)^(dias/365) − 1)"
+            />
+          </h4>
           <p className="text-xs text-slate-400">
             Lucro/juros gerados pelo mesmo capital em {dias} dias
           </p>

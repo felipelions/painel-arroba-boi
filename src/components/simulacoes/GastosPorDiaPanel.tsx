@@ -13,6 +13,7 @@ import {
   Cell
 } from 'recharts';
 import { CenarioResultados, CenarioVariaveis } from '../../types/simulation';
+import { FormulaHelp } from '../FormulaHelp';
 
 type GastoDiarioItem = {
   id: string;
@@ -106,6 +107,10 @@ export function GastosPorDiaPanel({
             <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-400" />
               Gastos médios por dia
+              <FormulaHelp
+                titulo="Gastos por dia"
+                formula="por_dia = total ÷ dias\npor_cabeça_dia = total ÷ dias ÷ qtd"
+              />
             </h3>
             <p className="text-[11px] text-slate-400">
               Média operacional nos {dias} dias de trato, sem a compra do gado
@@ -167,6 +172,10 @@ export function GastosPorDiaPanel({
           <h4 className="text-sm font-bold text-white flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-400" />
             Quanto sai de caixa por dia?
+            <FormulaHelp
+              titulo="Gastos por dia"
+              formula="por_dia = total ÷ dias\npor_cabeça_dia = total ÷ dias ÷ qtd"
+            />
           </h4>
           <p className="text-xs text-slate-400">
             Média dos custos operacionais diluída nos {dias} dias do ciclo
