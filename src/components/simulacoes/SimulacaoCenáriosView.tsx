@@ -93,7 +93,7 @@ function criarCenarioPadrao(): CenarioCompleto {
     quantidadeAnimais: 500,
     pesoMedioAtual: 410,
     pesoMedioEntrada: 360,
-    pesoMedioSaida: 540,
+    pesoMedioSaida: 492, // 360 + 1,10×120 (sempre sincronizado com entrada+GMD×dias)
     gmd: 1.10,
     rendimentoCarcaca: 0.54,
     mortalidade: 0.01,
@@ -193,14 +193,21 @@ export function SimulacaoCenáriosView() {
           list = [cenarioPadrao];
         }
         
-        // Garante resultados recalculados para todos os cenários
+        // Recalcula todos os cenários (saída dinâmica = entrada + GMD × dias)
         list = list.map(c => {
-          if (!c.resultados || typeof c.resultados.lucro !== 'number') {
-            const res = SimulationEngine.calculate(c.variaveis, c.fazenda);
-            const ins = InsightEngine.generateInsights(c.variaveis, res, c.fazenda);
-            return { ...c, resultados: res, alertas: ins };
-          }
-          return c;
+          const pesoEntrada =
+            c.variaveis.pesoMedioEntrada > 0
+              ? c.variaveis.pesoMedioEntrada
+              : c.variaveis.pesoMedioAtual;
+          const variaveis = {
+            ...c.variaveis,
+            pesoMedioSaida: Math.round(
+              pesoEntrada + (c.variaveis.gmd || 0) * (c.variaveis.diasPermanencia || 0)
+            )
+          };
+          const res = SimulationEngine.calculate(variaveis, c.fazenda);
+          const ins = InsightEngine.generateInsights(variaveis, res, c.fazenda);
+          return { ...c, variaveis, resultados: res, alertas: ins };
         });
 
         setCenarios(list);
@@ -235,6 +242,15 @@ export function SimulacaoCenáriosView() {
       ...cenarioAtual.variaveis,
       ...partial
     };
+
+    // Saída sempre dinâmica: acompanha entrada + GMD × dias
+    const pesoEntrada =
+      novasVariaveis.pesoMedioEntrada > 0
+        ? novasVariaveis.pesoMedioEntrada
+        : novasVariaveis.pesoMedioAtual;
+    novasVariaveis.pesoMedioSaida = Math.round(
+      pesoEntrada + (novasVariaveis.gmd || 0) * (novasVariaveis.diasPermanencia || 0)
+    );
 
     const novosResultados = SimulationEngine.calculate(novasVariaveis, cenarioAtual.fazenda);
     const novosAlertas = InsightEngine.generateInsights(novasVariaveis, novosResultados, cenarioAtual.fazenda);
@@ -306,9 +322,7 @@ export function SimulacaoCenáriosView() {
     if (!cenarioAtual) return;
     const vars = cenarioAtual.variaveis;
     const pesoEntrada = vars.pesoMedioEntrada > 0 ? vars.pesoMedioEntrada : vars.pesoMedioAtual;
-    const pesoSaida = vars.pesoMedioSaida > 0
-      ? vars.pesoMedioSaida
-      : Math.round(pesoEntrada + vars.gmd * vars.diasPermanencia);
+    const pesoSaida = Math.round(pesoEntrada + vars.gmd * vars.diasPermanencia);
     const media = Math.round((pesoEntrada + pesoSaida) / 2);
     updateVariables({
       pesoBaseAlimentacao: 0,
@@ -482,7 +496,7 @@ export function SimulacaoCenáriosView() {
     ? Math.round(arrobasEntrada * v.precoCompraArrobaBoiMagro)
     : (v.precoBoiMagro || 3800);
 
-  const pesoFinalCalculado = v.pesoMedioSaida > 0 ? v.pesoMedioSaida : Math.round(pesoEntradaEfetivo + v.gmd * v.diasPermanencia);
+  const pesoFinalCalculado = Math.round(pesoEntradaEfetivo + v.gmd * v.diasPermanencia);
   const arrobasFinal = Math.round(((pesoFinalCalculado * v.rendimentoCarcaca) / 15) * 10) / 10;
   // Ganho em @ de carcaça (mesma base da saída — não misturar com @ viva de entrada)
   const arrobasGanhas = Math.max(

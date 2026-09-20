@@ -55,7 +55,7 @@ export interface CenarioVariaveis {
   quantidadeAnimais: number;
   pesoMedioAtual: number; // Peso de entrada kg
   pesoMedioEntrada: number;
-  pesoMedioSaida: number; // Peso final kg
+  pesoMedioSaida: number; // espelho de entrada + GMD×dias (sempre recalculado)
   gmd: number; // Ganho médio diário kg/dia (ex: 1.5)
   rendimentoCarcaca: number; // ex: 0.56 (56%)
   mortalidade: number; // 0 a 0.05 (ex: 0.01)

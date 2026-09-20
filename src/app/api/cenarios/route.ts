@@ -46,7 +46,7 @@ const DEFAULT_SCENARIOS = [
       quantidadeAnimais: 500,
       pesoMedioAtual: 410,
       pesoMedioEntrada: 360,
-      pesoMedioSaida: 540,
+      pesoMedioSaida: 492,
       gmd: 1.10,
       rendimentoCarcaca: 0.54,
       mortalidade: 0.01,

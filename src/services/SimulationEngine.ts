@@ -20,7 +20,6 @@ export class SimulationEngine {
       quantidadeAnimais,
       pesoMedioAtual,
       pesoMedioEntrada,
-      pesoMedioSaida,
       gmd,
       rendimentoCarcaca,
       mortalidade,
@@ -63,7 +62,8 @@ export class SimulationEngine {
     const animaisAbatidos = Math.round(quantidadeAnimais * (1 - mortalidadeEfetiva));
     const pesoEntradaEfetivo = pesoMedioEntrada > 0 ? pesoMedioEntrada : pesoMedioAtual;
     const ganhoPesoTotal = gmd * diasPermanencia;
-    const pesoFinalCalculado = pesoMedioSaida > 0 ? pesoMedioSaida : (pesoEntradaEfetivo + ganhoPesoTotal);
+    // Saída sempre dinâmica: entrada + engorda (GMD × dias) — não usa pesoMedioSaida fixo
+    const pesoFinalCalculado = Math.round(pesoEntradaEfetivo + ganhoPesoTotal);
     const pesoVivoFinalTotal = animaisAbatidos * pesoFinalCalculado;
     const pesoVivoMedio = Math.round((pesoEntradaEfetivo + pesoFinalCalculado) / 2);
 

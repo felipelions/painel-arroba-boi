@@ -53,7 +53,7 @@ Retorne SEMPRE e EXCLUSIVAMENTE um objeto JSON válido contendo exatamente esta 
     "quantidadeAnimais": 300,
     "pesoMedioAtual": 400,
     "pesoMedioEntrada": 360,
-    "pesoMedioSaida": 540,
+    "pesoMedioSaida": 472,
     "gmd": 1.25,
     "rendimentoCarcaca": 0.54,
     "mortalidade": 0.01,
@@ -162,7 +162,7 @@ function generateIntelligentFallback(prompt: string) {
 
   // 2. Peso médio atual e saída
   let pesoAtual = 400;
-  let pesoSaida = 540;
+  let pesoSaida = 0;
   const matchPeso = p.match(/(\d{3})\s*kg/i);
   if (matchPeso && matchPeso[1]) {
     pesoAtual = parseInt(matchPeso[1], 10);
